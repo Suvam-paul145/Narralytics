@@ -1,0 +1,10 @@
+fastapi
+mangum
+pandas
+google-generativeai
+python-dotenv
+pydantic
+authlib
+httpx
+python-jose[cryptography]
+boto3
