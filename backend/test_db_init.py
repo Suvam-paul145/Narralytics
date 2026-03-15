@@ -1,20 +1,16 @@
-import sys, os
-from database import init_db
+from pathlib import Path
 
-# Mock DB_PATH for Windows testing
-import database
-database.DB_PATH = "C:\\tmp\\amazon_sales.db"
+import pandas as pd
 
-try:
-    init_db()
-    print("Success: Database initialized.")
-except Exception as e:
-    print(f"Error: {e}")
-    # Let's see some of the raw file content if it fails
-    try:
-        csv_path = os.path.join(os.path.dirname(database.__file__), "data", "amazon_sales.csv")
-        with open(csv_path, "rb") as f:
-            raw = f.read(1000).decode("latin1")
-            print(f"Raw head (1000 bytes): {raw!r}")
-    except:
-        pass
+from sqlite.executor import execute_query
+from sqlite.loader import load_csv_to_sqlite
+
+
+if __name__ == "__main__":
+    csv_path = Path(__file__).parent / "data" / "amazon_sales.csv"
+    db_path = Path(__file__).parent / "uploads" / "amazon_sales_test.db"
+
+    dataframe = pd.read_csv(csv_path, encoding="latin1")
+    load_csv_to_sqlite(dataframe, str(db_path), table_name="data")
+    sample = execute_query(str(db_path), "SELECT COUNT(*) AS row_count FROM data")
+    print(sample)
