@@ -80,12 +80,11 @@ const AnimatedNetwork = memo(function AnimatedNetwork() {
   );
 });
 
-export default function Chat() {
+export default function NarralyticsHome() {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [greeting, setGreeting] = useState("Good morning");
   const [mounted, setMounted] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -167,203 +166,7 @@ export default function Chat() {
           z-index: 0;
         }
 
-        /* ── Layout ── */
-        .narr-layout {
-          display: flex;
-          height: 100vh;
-          width: 100vw;
-          overflow: hidden;
-        }
-
-        /* ── Sidebar ── */
-        .narr-sidebar {
-          width: 260px;
-          min-width: 260px;
-          background: rgba(7, 7, 26, 0.4);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-          border-right: 1px solid var(--border);
-          display: flex;
-          flex-direction: column;
-          padding: 16px 14px;
-          z-index: 10;
-          color: var(--text);
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .narr-sidebar.closed {
-          transform: translateX(-100%);
-          margin-left: -260px;
-        }
-
-        .narr-sidebar-top-group {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 12px;
-        }
-
-        .narr-sidebar-toggle-mobile {
-          display: none;
-        }
-
-        /* Float Toggle Button (when sidebar is closed) */
-        .narr-toggle-float {
-          position: absolute;
-          top: 20px;
-          left: 20px;
-          z-index: 20;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          color: var(--text);
-          cursor: pointer;
-          padding: 8px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          opacity: 0;
-          pointer-events: none;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-        .narr-toggle-float.visible {
-          opacity: 1;
-          pointer-events: auto;
-        }
-        .narr-toggle-float:hover { 
-          background: var(--surface-hover); 
-          border-color: rgba(99,102,241,0.35);
-          transform: translateY(-1px);
-          box-shadow: 0 6px 16px rgba(0,0,0,0.3);
-        }
-
-        .narr-sidebar-btn {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 14px;
-          border-radius: 10px;
-          cursor: pointer;
-          font-size: 0.88rem;
-          font-family: var(--font-body);
-          background: var(--surface);
-          border: 1px solid var(--border);
-          color: var(--text);
-          transition: all 0.2s;
-          text-align: left;
-          width: 100%;
-        }
-        .narr-sidebar-btn:hover { 
-          background: var(--surface-hover); 
-          border-color: rgba(99,102,241,0.35); 
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .narr-sidebar-btn.icon-only {
-          padding: 10px;
-          width: auto;
-          background: transparent;
-          border: 1px solid transparent;
-          color: var(--muted);
-          box-shadow: none;
-        }
-        .narr-sidebar-btn.icon-only:hover {
-          color: var(--text);
-          background: var(--surface);
-          border-color: var(--border);
-          transform: none;
-        }
-        
-        .narr-sidebar-search {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 14px;
-          border-radius: 10px;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          transition: border-color 0.25s, box-shadow 0.25s;
-          margin-bottom: 16px;
-        }
-        .narr-sidebar-search:focus-within {
-          border-color: var(--border-focus);
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
-        }
-        .narr-sidebar-search input {
-          background: transparent;
-          border: none;
-          color: var(--text);
-          outline: none;
-          font-size: 0.88rem;
-          width: 100%;
-          font-family: var(--font-body);
-        }
-        .narr-sidebar-search input::placeholder {
-          color: rgba(232,232,240,0.3);
-        }
-        
-        .narr-sidebar-icon {
-          width: 16px; height: 16px; opacity: 0.8;
-          display: flex; align-items: center; justify-content: center;
-        }
-
-        .narr-sidebar-section {
-          margin-top: 16px;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          overflow-y: auto;
-        }
-        
-        /* ── Sidebar Scrollbar ── */
-        .narr-sidebar-section::-webkit-scrollbar { width: 4px; }
-        .narr-sidebar-section::-webkit-scrollbar-track { background: transparent; }
-        .narr-sidebar-section::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-
-        .narr-sidebar-label {
-          font-size: 0.72rem;
-          color: #888;
-          padding: 12px 12px 8px;
-          font-weight: 500;
-        }
-
-        .narr-history-item {
-          padding: 8px 12px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 0.85rem;
-          color: #d1d5db;
-          transition: background 0.2s;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .narr-history-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-        .narr-sidebar-footer {
-          margin-top: auto;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        .narr-sidebar-footer:hover { background: rgba(255,255,255,0.08); }
-        
-        .narr-avatar {
-          width: 28px; height: 28px;
-          border-radius: 50%;
-          background: #444;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 0.8rem; font-weight: 500;
-        }
-        .narr-user-info { display: flex; flex-direction: column; }
-        .narr-user-name { font-size: 0.85rem; font-weight: 500; }
-        .narr-user-plan { font-size: 0.7rem; color: #888; }
-
+        /* ── Navbar ── */
         .narr-nav {
           position: fixed;
           top: 0; left: 0; right: 0;
@@ -378,28 +181,78 @@ export default function Chat() {
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
         }
+        .narr-logo {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          text-decoration: none;
+          color: var(--text);
+          font-family: var(--font-body);
+          font-weight: 600;
+          font-size: 1.05rem;
+          letter-spacing: -0.01em;
+        }
+        .narr-logo-icon {
+          width: 34px; height: 34px;
+          background: linear-gradient(135deg, var(--accent), var(--accent2));
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1rem;
+          box-shadow: 0 0 18px rgba(99,102,241,0.4);
+        }
+        .narr-logo span { color: var(--accent2); }
+        .narr-nav-links {
+          display: flex;
+          gap: 2rem;
+          list-style: none;
+        }
+        .narr-nav-links a {
+          color: var(--muted);
+          text-decoration: none;
+          font-size: 0.9rem;
+          font-weight: 400;
+          transition: color 0.2s;
+        }
+        .narr-nav-links a:hover { color: var(--text); }
+        .narr-nav-actions { display: flex; align-items: center; gap: 12px; }
+        .btn-ghost {
+          background: none;
+          border: 1px solid var(--border);
+          color: var(--muted);
+          padding: 7px 16px;
+          border-radius: 8px;
+          font-size: 0.85rem;
+          cursor: pointer;
+          font-family: var(--font-body);
+          transition: all 0.2s;
+        }
+        .btn-ghost:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+        .btn-primary {
+          background: var(--accent);
+          border: none;
+          color: #fff;
+          padding: 8px 18px;
+          border-radius: 8px;
+          font-size: 0.88rem;
+          font-weight: 500;
+          cursor: pointer;
+          font-family: var(--font-body);
+          display: flex; align-items: center; gap: 6px;
+          transition: all 0.2s;
+          box-shadow: 0 0 20px rgba(99,102,241,0.3);
+        }
+        .btn-primary:hover { background: #4f52e8; box-shadow: 0 0 28px rgba(99,102,241,0.5); transform: translateY(-1px); }
 
         /* ── Main ── */
-        .narr-main-wrapper {
-          flex: 1;
-          position: relative;
-          display: flex;
-          flex-direction: column;
-          background: var(--bg);
-          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          width: 100%;
-        }
-        
         .narr-main {
           flex: 1;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 40px 1.5rem 2rem;
+          padding: 90px 1.5rem 2rem;
           position: relative;
           z-index: 1;
-          overflow-y: auto;
         }
 
         /* ── Greeting ── */
@@ -575,75 +428,54 @@ export default function Chat() {
         }
         .narr-chip-icon { font-size: 0.85rem; }
 
+        /* ── Status bar ── */
+        .narr-status {
+          position: fixed;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          align-items: center;
+          gap: 20px;
+          font-family: var(--font-mono);
+          font-size: 0.7rem;
+          color: rgba(232,232,240,0.25);
+          z-index: 10;
+          white-space: nowrap;
+        }
+        .narr-status-dot {
+          width: 6px; height: 6px;
+          background: var(--teal);
+          border-radius: 50%;
+          box-shadow: 0 0 8px var(--teal);
+          animation: pulse-dot 2s ease infinite;
+        }
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+
         /* ── Scrollbar ── */
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 4px; }
 
-        @media (max-width: 768px) {
-          .narr-sidebar { 
-            position: absolute; height: 100%; 
-            box-shadow: 4px 0 20px rgba(0,0,0,0.5);
-          }
-          .narr-sidebar.closed { margin-left: 0; }
-          .narr-toggle-float { display: flex; opacity: 1; pointer-events: auto; }
+        @media (max-width: 640px) {
+          .narr-nav-links { display: none; }
+          .btn-ghost { display: none; }
           .narr-chip { font-size: 0.76rem; padding: 7px 12px; }
         }
       `}</style>
-      
-      <div className="narr-layout">
-        <button 
-          className={`narr-toggle-float ${!isSidebarOpen ? 'visible' : ''}`}
-          onClick={() => setIsSidebarOpen(true)}
-          title="Open sidebar"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="9" y1="3" x2="9" y2="21"></line>
-          </svg>
-        </button>
 
-        <aside className={`narr-sidebar ${isSidebarOpen ? '' : 'closed'}`}>
-          <div className="narr-sidebar-top-group">
-            <button 
-              className="narr-sidebar-btn icon-only" 
-              onClick={() => setIsSidebarOpen(false)}
-              title="Close sidebar"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="9" y1="3" x2="9" y2="21"></line>
-              </svg>
-            </button>
-            <button className="narr-sidebar-btn icon-only" onClick={() => setQuery("")} title="New chat">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </button>
-          </div>
-          
-          <div className="narr-sidebar-search">
-            <span className="narr-sidebar-icon" style={{ opacity: 0.5 }}>⚲</span>
-            <input 
-              type="text" 
-              placeholder="Search chats..." 
-            />
-          </div>
-          
-          <div className="narr-sidebar-section">
-            {/* Chat history will appear here and can be filtered by the search above */}
-          </div>
-        </aside>
+      <div className="narr-page">
+        <AnimatedNetwork />
 
-        <div className="narr-main-wrapper">
-          <AnimatedNetwork />
-
-          {/* ── Main content ── */}
-          <main className="narr-main">
-            {/* Greeting */}
-            <h1 className={`narr-greeting${mounted ? " show" : ""}`}>
-              {greeting}, analyst.
-            </h1>
+        {/* ── Main content ── */}
+        <main className="narr-main">
+          {/* Greeting */}
+          <h1 className={`narr-greeting${mounted ? " show" : ""}`}>
+            {greeting}, analyst.
+          </h1>
 
           <p className={`narr-subtitle${mounted ? " show" : ""}`}>
             Ask a question about your data — get charts, insights, and reports instantly.
@@ -707,7 +539,7 @@ export default function Chat() {
             </div>
           </div>
         </main>
-        </div>
+
       </div>
     </>
   );
