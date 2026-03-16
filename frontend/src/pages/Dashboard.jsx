@@ -730,6 +730,15 @@ function ChatPreview() {
 // ─── OVERVIEW PAGE ────────────────────────────────────────────
 function OverviewPage({loading}) {
   const [chartTab,setChartTab]=useState("revenue");
+  const { user } = useAuth();
+  const [greeting, setGreeting] = useState("Good morning");
+
+  useEffect(() => {
+    const h = new Date().getHours();
+    if (h >= 12 && h < 17) setGreeting("Good afternoon");
+    else if (h >= 17) setGreeting("Good evening");
+  }, []);
+
   const kpis=[
     {icon:Users,      label:"Total Users",   value:"12,847",change:"+18.2%",up:true, color:"#5b6af9",colorSoft:"var(--accent-soft)"},
     {icon:Zap,        label:"Queries Today", value:"4,218", change:"+9.4%", up:true, color:"#f5a623",colorSoft:"var(--amber-soft)"},
@@ -744,7 +753,7 @@ function OverviewPage({loading}) {
         <div>
           <h2 style={{fontFamily:"'DM Serif Display',serif",fontWeight:400,
             fontSize:"1.5rem",letterSpacing:"-0.02em",color:"var(--text)"}}>
-            Good morning, Suvam
+            {greeting}, {user?.name || "Guest"}
           </h2>
           <p style={{fontSize:"0.82rem",color:"var(--text-muted)",marginTop:3}}>
             Sales Dataset 2023 · 50,000 rows · Last synced 2 minutes ago
