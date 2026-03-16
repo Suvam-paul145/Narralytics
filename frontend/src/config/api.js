@@ -1,0 +1,14 @@
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+export const API_ENDPOINTS = {
+  HEALTH: `${API_BASE_URL}/api/health`,
+  AUTH: `${API_BASE_URL}/auth`,
+  DATASETS: `${API_BASE_URL}/datasets`,
+  DASHBOARD: `${API_BASE_URL}/dashboard`,
+  QUERY: `${API_BASE_URL}/query`,
+  CHAT: `${API_BASE_URL}/chat`,
+  REPORTS: `${API_BASE_URL}/reports`,
+};
+
+export default API_BASE_URL;

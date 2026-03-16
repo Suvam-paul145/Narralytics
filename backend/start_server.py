@@ -13,7 +13,7 @@ def run_config_test():
     """Run configuration test first"""
     print("🧪 Running configuration tests...")
     try:
-        result = subprocess.run([sys.executable, "test_config.py"], 
+        result = subprocess.run([sys.executable, "tests/test_config.py"], 
                               capture_output=True, text=True)
         print(result.stdout)
         if result.stderr:
@@ -65,7 +65,7 @@ def main():
     if not run_config_test():
         print("\n❌ Configuration test failed!")
         print("Please fix the configuration issues before starting the server.")
-        print("Run 'python test_config.py' for detailed error information.")
+        print("Run 'python tests/test_config.py' for detailed error information.")
         sys.exit(1)
     
     # Start the server
