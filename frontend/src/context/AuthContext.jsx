@@ -8,12 +8,19 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Check local storage for guest session on load
-    const guestUser = localStorage.getItem("guestUser");
-    if (guestUser) {
-      setUser(JSON.parse(guestUser));
+    try {
+      const guestUser = localStorage.getItem("guestUser");
+      if (guestUser && guestUser !== "undefined") {
+        setUser(JSON.parse(guestUser));
+      }
+    } catch (err) {
+      console.error("Failed to parse guestUser from localStorage", err);
+      localStorage.removeItem("guestUser");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
+
 
   const loginAsGuest = () => {
     const guestData = { id: "guest", name: "Guest User", role: "guest" };

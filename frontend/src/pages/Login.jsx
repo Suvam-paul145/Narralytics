@@ -1,17 +1,20 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Brain, ArrowRight } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
   const { loginAsGuest, user } = useAuth();
+  
+  React.useEffect(() => {
+    if (user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
 
-  // Redirect if already logged in
-  if (user) {
-    navigate("/dashboard", { replace: true });
-    return null;
-  }
+  if (user) return null;
+
 
   const handleGuestLogin = () => {
     loginAsGuest();
@@ -32,21 +35,27 @@ export default function Login() {
         background: "#0c0c1e",
         padding: "40px",
         borderRadius: "16px",
-        border: "1px solid rgba(255,255,255,0.07)",
         boxShadow: "0 12px 60px rgba(0,0,0,0.6)",
         textAlign: "center",
         maxWidth: "400px",
         width: "100%"
       }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          background: "#5b6af9",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 24px",
-          boxShadow: "0 0 20px rgba(91,106,249,0.3)"
-        }}>
-          <Brain size={24} color="#fff" />
-        </div>
+        <Link to="/" style={{ textDecoration: "none" }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 12,
+            background: "#5b6af9",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 24px",
+            boxShadow: "0 0 20px rgba(91,106,249,0.3)",
+            cursor: "pointer",
+            transition: "all 0.2s"
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.05)"}
+          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+          >
+            <Brain size={24} color="#fff" />
+          </div>
+        </Link>
         
         <h2 style={{
           fontFamily: "'DM Serif Display', serif",
@@ -72,8 +81,8 @@ export default function Login() {
             width: "100%",
             padding: "12px",
             marginBottom: "16px",
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.03)",
+            border: "none",
             color: "#55557a",
             borderRadius: "10px",
             fontSize: "0.95rem",

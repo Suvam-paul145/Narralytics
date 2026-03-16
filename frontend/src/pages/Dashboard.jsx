@@ -8,6 +8,10 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell,
@@ -320,6 +324,7 @@ function IconBtn({icon:Icon,onClick,active,badge,title:ttl}) {
 
 // ─── SIDEBAR ─────────────────────────────────────────────────
 function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
+  const navigate = useNavigate();
   const navItems = [
     {id:"overview",   icon:LayoutDashboard,label:"Overview"},
     {id:"analytics",  icon:BarChart2,      label:"Analytics"},
@@ -330,6 +335,17 @@ function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
     {id:"alerts",     icon:Bell,           label:"Alerts",   badge:3},
   ];
 
+  const handleNavClick = (id) => {
+    if (id === "chat") {
+      navigate("/chat");
+    } else if (id === "reports") {
+      navigate("/reports");
+    } else {
+      setActivePage(id);
+    }
+  };
+
+
   return (
     <aside style={{
       width:collapsed?62:220,
@@ -339,9 +355,9 @@ function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
       flexShrink:0,overflow:"hidden",height:"100vh",position:"relative",zIndex:10,
     }}>
       {/* Logo */}
-      <div style={{height:62,padding:collapsed?"0 14px":"0 18px",
+      <div onClick={() => navigate("/")} style={{height:62,padding:collapsed?"0 14px":"0 18px",
         borderBottom:"1px solid var(--border)",
-        display:"flex",alignItems:"center",gap:9,flexShrink:0}}>
+        display:"flex",alignItems:"center",gap:9,flexShrink:0,cursor:"pointer"}}>
         <div style={{width:30,height:30,borderRadius:8,flexShrink:0,
           background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",
           boxShadow:"0 0 14px var(--accent-glow)"}}>
@@ -366,7 +382,8 @@ function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
           const active=activePage===item.id;
           const Icon=item.icon;
           return (
-            <button key={item.id} onClick={()=>setActivePage(item.id)}
+            <button key={item.id} onClick={()=>handleNavClick(item.id)}
+
               title={collapsed?item.label:undefined}
               className="nav-item"
               style={{display:"flex",alignItems:"center",gap:9,
@@ -445,7 +462,10 @@ function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
 
 // ─── TOP NAV ─────────────────────────────────────────────────
 function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOpen,activePage}) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [search,setSearch]=useState("");
+
   const titles={overview:"Dashboard Overview",analytics:"Analytics",
     datasets:"Datasets",chat:"AI Chat Assistant",insights:"AI Insights",
     reports:"Reports",alerts:"Alerts",settings:"Settings"};
@@ -559,8 +579,9 @@ function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOp
             <div style={{width:24,height:24,borderRadius:7,
               background:"linear-gradient(135deg,#5b6af9,#a78bfa)",
               display:"flex",alignItems:"center",justifyContent:"center",
-              fontSize:10,fontWeight:700,color:"#fff"}}>SP</div>
-            <span style={{fontSize:"0.82rem",fontWeight:500,color:"var(--text)",whiteSpace:"nowrap"}}>Suvam</span>
+              fontSize:10,fontWeight:700,color:"#fff"}}>{user?.name?.split(' ').map(n=>n[0]).join('') || 'G'}</div>
+            <span style={{fontSize:"0.82rem",fontWeight:500,color:"var(--text)",whiteSpace:"nowrap"}}>{user?.name || 'Guest'}</span>
+
             <ChevronDown size={11} color="var(--text-muted)"/>
           </button>
           {profileOpen&&(
@@ -569,9 +590,10 @@ function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOp
               background:"var(--bg-card)",border:"1px solid var(--border)",
               borderRadius:12,boxShadow:"var(--shadow-lg)",overflow:"hidden",zIndex:200}}>
               <div style={{padding:"11px 14px",borderBottom:"1px solid var(--border)"}}>
-                <p style={{fontSize:"0.85rem",fontWeight:600,color:"var(--text)"}}>Suvam Paul</p>
-                <p style={{fontSize:"0.78rem",color:"var(--text-muted)"}}>suvam@narralytics.io</p>
+                <p style={{fontSize:"0.85rem",fontWeight:600,color:"var(--text)"}}>{user?.name || 'Guest User'}</p>
+                <p style={{fontSize:"0.78rem",color:"var(--text-muted)"}}>{user?.role || 'Guest'} account</p>
               </div>
+
               {[{icon:User,label:"Profile"},{icon:Settings,label:"Settings"}].map(item=>(
                 <button key={item.label} style={{display:"flex",alignItems:"center",gap:9,
                   padding:"9px 14px",width:"100%",border:"none",
@@ -583,7 +605,12 @@ function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOp
                 </button>
               ))}
               <div style={{height:1,background:"var(--border)"}}/>
-              <button style={{display:"flex",alignItems:"center",gap:9,
+              <button 
+                onClick={() => {
+                  logout();
+                  navigate("/login");
+                }}
+                style={{display:"flex",alignItems:"center",gap:9,
                 padding:"9px 14px",width:"100%",border:"none",
                 background:"transparent",color:"var(--red)",fontSize:"0.82rem",
                 textAlign:"left",transition:"background .15s"}}
@@ -591,6 +618,7 @@ function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOp
                 onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <LogOut size={13}/>Sign out
               </button>
+
             </div>
           )}
         </div>
@@ -644,8 +672,10 @@ function UploadZone({onUpload}) {
 }
 
 // ─── CHAT PREVIEW ─────────────────────────────────────────────
-function ChatPreview({onOpenChat}) {
+function ChatPreview() {
+  const navigate = useNavigate();
   const [query,setQuery]=useState("");
+
   const starters=["Show me revenue by category","Why is Electronics growing fastest?","Compare Q3 vs Q4 sales"];
   return (
     <div style={{background:"var(--bg-card)",borderRadius:16,
@@ -685,11 +715,12 @@ function ChatPreview({onOpenChat}) {
             placeholder="Ask a business question..."
             style={{flex:1,background:"transparent",border:"none",outline:"none",
               fontSize:"0.80rem",color:"var(--text)"}}/>
-          <button onClick={()=>query&&onOpenChat?.()} style={{
+          <button onClick={() => navigate("/chat")} style={{
             background:"var(--accent)",border:"none",borderRadius:6,
             padding:"3px 9px",color:"#fff",fontSize:"0.78rem",fontWeight:600,cursor:"pointer"}}>
             Ask
           </button>
+
         </div>
       </div>
     </div>

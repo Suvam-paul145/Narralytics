@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, memo } from "react";
+import { useNavigate } from "react-router-dom";
+
+
 
 const SUGGESTIONS = [
   { icon: "📊", label: "Show monthly revenue by region" },
@@ -81,6 +84,7 @@ const AnimatedNetwork = memo(function AnimatedNetwork() {
 });
 
 export default function Chat() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [greeting, setGreeting] = useState("Good morning");
@@ -606,10 +610,22 @@ export default function Chat() {
         <aside className={`narr-sidebar ${isSidebarOpen ? '' : 'closed'}`}>
           <div className="narr-sidebar-top-group">
             <button 
+              className="narr-sidebar-btn" 
+              onClick={() => navigate("/dashboard")}
+              style={{ marginBottom: 10, justifyContent: 'center' }}
+            >
+              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>← Dashboard</span>
+            </button>
+
+          </div>
+
+          <div className="narr-sidebar-top-group">
+            <button 
               className="narr-sidebar-btn icon-only" 
               onClick={() => setIsSidebarOpen(false)}
               title="Close sidebar"
             >
+
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="9" y1="3" x2="9" y2="21"></line>
