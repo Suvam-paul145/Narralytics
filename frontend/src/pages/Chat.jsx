@@ -90,6 +90,21 @@ export default function Chat() {
   const [greeting, setGreeting] = useState("Good morning");
   const [mounted, setMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  const [selectedModel, setSelectedModel] = useState("Gemini");
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const MODELS = ["Gemini", "Lama", "Nvidia"];
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsModelDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -456,7 +471,6 @@ export default function Chat() {
           display: flex;
           flex-direction: column;
           transition: border-color 0.25s, box-shadow 0.25s;
-          overflow: hidden;
         }
         .narr-input-box.focused {
           border-color: var(--border-focus);
@@ -515,6 +529,26 @@ export default function Chat() {
           50% { box-shadow: 0 0 12px rgba(52,211,153,0.4); }
         }
 
+        .narr-upload-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid var(--border);
+          color: var(--muted);
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .narr-upload-btn:hover {
+          background: var(--surface-hover);
+          border-color: rgba(99,102,241,0.35);
+          color: var(--text);
+          transform: translateY(-1px);
+        }
+
         .narr-send-btn {
           width: 38px; height: 38px;
           background: var(--accent);
@@ -529,6 +563,78 @@ export default function Chat() {
         .narr-send-btn:hover { background: #4f52e8; transform: scale(1.05); box-shadow: 0 0 22px rgba(99,102,241,0.5); }
         .narr-send-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
         .narr-send-btn svg { width: 16px; height: 16px; fill: #fff; }
+
+        /* ── Model Dropdown ── */
+        .narr-model-wrap {
+          position: relative;
+        }
+        .narr-model-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: transparent;
+          border: 1.5px solid var(--border);
+          color: var(--muted);
+          padding: 8px 12px;
+          border-radius: 10px;
+          font-family: var(--font-body);
+          font-size: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .narr-model-btn:hover, .narr-model-btn.active {
+          border-color: rgba(99,102,241,0.4);
+          color: var(--text);
+          background: rgba(255,255,255,0.02);
+        }
+        .narr-model-dropdown {
+          position: absolute;
+          bottom: calc(100% + 8px);
+          right: 0;
+          background: var(--bg2);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 140px;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+          opacity: 0;
+          visibility: hidden;
+          transform: translateY(10px);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          z-index: 50;
+        }
+        .narr-model-dropdown.show {
+          opacity: 1;
+          visibility: visible;
+          transform: translateY(0);
+        }
+        .narr-model-option {
+          background: transparent;
+          border: none;
+          color: var(--muted);
+          padding: 8px 12px;
+          text-align: left;
+          border-radius: 8px;
+          font-family: var(--font-body);
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .narr-model-option:hover {
+          background: var(--surface);
+          color: var(--text);
+        }
+        .narr-model-option.selected {
+          color: var(--accent2);
+          background: rgba(167,139,250,0.1);
+        }
 
         /* ── Suggestions ── */
         .narr-suggestions {
@@ -688,17 +794,56 @@ export default function Chat() {
                 <div className="narr-input-meta">
                   <span className="narr-badge active">● AI Ready</span>
                   <span className="narr-badge">CSV / XLSX / JSON</span>
+                  <label className="narr-upload-btn" title="Upload file">
+                    <input type="file" accept=".csv, .xlsx, .json" style={{ display: 'none' }} />
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  </label>
                 </div>
-                <button
-                  className="narr-send-btn"
-                  onClick={() => handleSubmit()}
-                  disabled={!query.trim()}
-                  title="Send"
-                >
-                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
-                  </svg>
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div className="narr-model-wrap" ref={dropdownRef}>
+                    <button 
+                      className={`narr-model-btn ${isModelDropdownOpen ? 'active' : ''}`}
+                      onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                    >
+                      {selectedModel}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6, transform: isModelDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div className={`narr-model-dropdown ${isModelDropdownOpen ? 'show' : ''}`}>
+                      {MODELS.map(model => (
+                        <button
+                          key={model}
+                          className={`narr-model-option ${selectedModel === model ? 'selected' : ''}`}
+                          onClick={() => {
+                            setSelectedModel(model);
+                            setIsModelDropdownOpen(false);
+                          }}
+                        >
+                          {model}
+                          {selectedModel === model && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    className="narr-send-btn"
+                    onClick={() => handleSubmit()}
+                    disabled={!query.trim()}
+                    title="Send"
+                  >
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
