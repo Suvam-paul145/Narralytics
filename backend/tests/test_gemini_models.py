@@ -12,7 +12,7 @@ sys.path.insert(0, str(backend_dir))
 
 try:
     from config import settings
-    import google.generativeai as genai
+    from google import genai
     
     print("🔍 Testing Gemini API and listing available models...")
     
@@ -20,25 +20,27 @@ try:
         print("❌ GEMINI_API_KEY not configured")
         sys.exit(1)
     
-    genai.configure(api_key=settings.GEMINI_API_KEY)
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
     # List available models
     print("\n📋 Available Gemini Models:")
-    models = genai.list_models()
+    models = client.models.list()
     
     for model in models:
-        if 'generateContent' in model.supported_generation_methods:
+        if 'generateContent' in model.supported_actions:
             print(f"✅ {model.name}")
     
     # Test with the first available model
-    available_models = [m for m in models if 'generateContent' in m.supported_generation_methods]
+    available_models = [m for m in models if 'generateContent' in m.supported_actions]
     
     if available_models:
         test_model_name = available_models[0].name
         print(f"\n🧪 Testing with model: {test_model_name}")
         
-        model = genai.GenerativeModel(test_model_name)
-        response = model.generate_content("Say 'Hello from Gemini!'")
+        response = client.models.generate_content(
+            model=test_model_name,
+            contents="Say 'Hello from Gemini!'"
+        )
         print(f"✅ Success! Response: {response.text.strip()}")
         
         print(f"\n💡 Use this model name in your LLM modules: {test_model_name}")

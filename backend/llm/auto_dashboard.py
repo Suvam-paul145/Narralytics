@@ -1,17 +1,17 @@
 import json
 from functools import lru_cache
 
-import google.generativeai as genai
+from google import genai
 
 from config import settings
 
 
 @lru_cache(maxsize=1)
-def _get_model():
+def _get_client():
+    """Get the Google GenAI client with API key configuration"""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def _parse_json_payload(raw: str) -> dict:
@@ -109,7 +109,11 @@ Return valid JSON only:
 def generate_auto_dashboard(schema: dict) -> list[dict]:
     prompt = build_auto_dashboard_prompt(schema)
     try:
-        response = _get_model().generate_content(prompt)
+        client = _get_client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
         payload = _parse_json_payload(response.text)
         return payload.get("charts", [])
     except Exception as exc:

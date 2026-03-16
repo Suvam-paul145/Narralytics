@@ -138,8 +138,8 @@ def test_dependencies():
     
     for package in required_packages:
         try:
-            if package == 'google.generativeai':
-                import google.generativeai
+            if package == 'google-genai':
+                from google import genai
                 print(f"✅ {package}: Installed")
             elif package == 'jose':
                 from jose import jwt

@@ -1,17 +1,17 @@
 import json
 from functools import lru_cache
 
-import google.generativeai as genai
+from google import genai
 
 from config import settings
 
 
 @lru_cache(maxsize=1)
-def _get_model():
+def _get_client():
+    """Get the Google GenAI client with API key configuration"""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def _parse_json_payload(raw: str) -> dict:
@@ -67,11 +67,27 @@ Or:
 
 def get_chat_response(schema: dict, dataset_filename: str, message: str, history: list) -> dict:
     system_prompt = build_chat_system_prompt(schema, dataset_filename)
-    messages = [{"role": turn["role"], "parts": [turn["content"]]} for turn in history[-10:]]
-    messages.append({"role": "user", "parts": [f"{system_prompt}\n\nUser: {message}"]})
+    
+    # Convert history to new format
+    contents = []
+    for turn in history[-10:]:
+        contents.append({
+            "role": turn["role"],
+            "parts": [{"text": turn["content"]}]
+        })
+    
+    # Add current message
+    contents.append({
+        "role": "user", 
+        "parts": [{"text": f"{system_prompt}\n\nUser: {message}"}]
+    })
 
     try:
-        response = _get_model().generate_content(messages)
+        client = _get_client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents
+        )
         return _parse_json_payload(response.text)
     except Exception as exc:
         return {"cannot_answer": True, "reason": str(exc)}
@@ -94,6 +110,11 @@ Rewrite the answer in 2-4 sentences using the exact figures from the SQL result.
 Return only the final answer text.
 """
     try:
-        return _get_model().generate_content(prompt).text.strip()
+        client = _get_client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text.strip()
     except Exception:
         return draft_answer

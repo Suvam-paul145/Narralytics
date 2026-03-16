@@ -11,14 +11,16 @@ sys.path.insert(0, str(backend_dir))
 
 try:
     from config import settings
-    import google.generativeai as genai
+    from google import genai
     
     print("🧪 Testing Gemini API with gemini-2.5-flash...")
     
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
-    response = model.generate_content("Say 'Hello from Gemini 2.5 Flash!'")
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents="Say 'Hello from Gemini 2.5 Flash!'"
+    )
     print(f"✅ Success! Response: {response.text.strip()}")
     
 except Exception as e:

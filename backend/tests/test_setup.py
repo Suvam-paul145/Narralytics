@@ -81,7 +81,7 @@ def test_gemini_api():
     """Test Gemini API connection"""
     try:
         from config import settings
-        import google.generativeai as genai
+        from google import genai
         
         if not settings.GEMINI_API_KEY:
             print("❌ GEMINI_API_KEY not configured")

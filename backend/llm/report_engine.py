@@ -1,16 +1,16 @@
 from functools import lru_cache
 
-import google.generativeai as genai
+from google import genai
 
 from config import settings
 
 
 @lru_cache(maxsize=1)
-def _get_model():
+def _get_client():
+    """Get the Google GenAI client with API key configuration"""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def generate_report_summary(dataset_name: str, charts: list) -> str:
@@ -33,6 +33,11 @@ Write a 3-5 sentence executive summary paragraph that:
 Return only the paragraph text.
 """
     try:
-        return _get_model().generate_content(prompt).text.strip()
+        client = _get_client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text.strip()
     except Exception:
         return "Executive summary unavailable. Review the charts below for the key findings."

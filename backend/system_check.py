@@ -126,6 +126,35 @@ def check_health_system():
     
     return True
 
+def check_gemini_migration():
+    """Check if Gemini SDK migration is complete"""
+    print("🔄 Checking Gemini SDK migration...")
+    
+    # Check requirements.txt
+    with open("requirements.txt", "r", encoding="utf-8") as f:
+        requirements = f.read()
+        if "google-genai" in requirements and "google-generativeai" not in requirements:
+            print("✅ Requirements.txt updated to use google-genai")
+        else:
+            print("❌ Requirements.txt still contains old google-generativeai package")
+            return False
+    
+    # Check LLM files for new import pattern
+    llm_files = ["llm/chat_engine.py", "llm/chart_engine.py", "llm/report_engine.py", "llm/auto_dashboard.py"]
+    
+    for file_path in llm_files:
+        if Path(file_path).exists():
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                if "from google import genai" in content and "import google.generativeai" not in content:
+                    print(f"✅ {file_path} migrated to new SDK")
+                else:
+                    print(f"❌ {file_path} still uses old SDK")
+                    return False
+    
+    print("✅ Gemini SDK migration completed successfully")
+    return True
+
 def main():
     """Main system check"""
     print("🔍 Narralytics System Check")
@@ -139,7 +168,8 @@ def main():
         check_file_structure,
         check_test_organization,
         check_gitignore,
-        check_health_system
+        check_health_system,
+        check_gemini_migration
     ]
     
     passed = 0
@@ -154,7 +184,7 @@ def main():
     print(f"✅ Passed: {passed}/{total}")
     
     if passed == total:
-        print("🎉 System is properly organized and ready!")
+        print("🎉 System is properly organized and migrated!")
         return True
     else:
         print("❌ Some issues need to be addressed")

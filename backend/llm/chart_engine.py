@@ -1,17 +1,17 @@
 import json
 from functools import lru_cache
 
-import google.generativeai as genai
+from google import genai
 
 from config import settings
 
 
 @lru_cache(maxsize=1)
-def _get_model():
+def _get_client():
+    """Get the Google GenAI client with API key configuration"""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured")
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def _parse_json_payload(raw: str) -> dict:
@@ -104,11 +104,26 @@ If you cannot answer, return:
 {{ "cannot_answer": true, "reason": "specific explanation" }}
 """
 
-    messages = [{"role": turn["role"], "parts": [turn["content"]]} for turn in history[-6:]]
-    messages.append({"role": "user", "parts": [f"{system_prompt}\n\nQuery: {prompt}"]})
+    # Convert history to new format
+    contents = []
+    for turn in history[-6:]:
+        contents.append({
+            "role": turn["role"],
+            "parts": [{"text": turn["content"]}]
+        })
+    
+    # Add current message
+    contents.append({
+        "role": "user", 
+        "parts": [{"text": f"{system_prompt}\n\nQuery: {prompt}"}]
+    })
 
     try:
-        response = _get_model().generate_content(messages)
+        client = _get_client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents
+        )
         return _parse_json_payload(response.text)
     except Exception as exc:
         return {"cannot_answer": True, "reason": str(exc)}
