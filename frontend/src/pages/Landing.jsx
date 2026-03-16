@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import * as THREE from "three";
 import {
   BarChart2, Brain, Upload, MessageSquare, FileText,
   Mic, Zap, Shield, ChevronRight, ArrowRight,
@@ -95,6 +94,23 @@ const GLOBAL_CSS = `
   .fade-up-5 { animation: fadeUp .7s cubic-bezier(.16,1,.3,1) .60s both }
   .float-anim { animation: float 5s ease-in-out infinite }
 
+  @keyframes blinkColor {
+    0%, 100% { border-color: var(--border-glow); background: var(--accent-soft); }
+    50% { border-color: var(--accent); background: var(--accent-glow); }
+  }
+  .blink-anim { animation: blinkColor 2.5s ease-in-out infinite; }
+
+  @keyframes blob-anim-1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+  }
+  @keyframes blob-anim-2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(-30px, 40px) scale(1.15); }
+    66% { transform: translate(40px, -20px) scale(0.85); }
+  }
+
   .hover-lift { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease }
   .hover-lift:hover { transform: translateY(-4px) }
   .btn-hover { transition: all .2s ease }
@@ -145,147 +161,7 @@ function applyTheme(isDark) {
   Object.entries(tokens).forEach(([k, v]) => root.style.setProperty(k, v));
 }
 
-// ─── THREE.JS NEURAL NETWORK ──────────────────────────────────
-function NeuralNetCanvas({ isDark }) {
-  const canvasRef = useRef(null);
-  const mouseRef  = useRef({ x: 0, y: 0 });
-  const frameRef  = useRef(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const W = canvas.offsetWidth, H = canvas.offsetHeight;
-
-    const scene    = new THREE.Scene();
-    const camera   = new THREE.PerspectiveCamera(55, W / H, 0.1, 500);
-    camera.position.set(0, 0, 70);
-
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-    renderer.setSize(W, H);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0);
-
-    // ── Nodes ───────────────────────────────────────────────────
-    const NODE_COUNT = 80;
-    const nodePositions = [];
-    const nodeMeshes    = [];
-
-    const nodeGeom = new THREE.SphereGeometry(0.45, 8, 8);
-
-    for (let i = 0; i < NODE_COUNT; i++) {
-      const mat = new THREE.MeshBasicMaterial({
-        color: i % 7 === 0 ? 0xf5a623
-              : i % 5 === 0 ? 0x2dd4a0
-              : 0x5b6af9,
-        transparent: true,
-        opacity: 0.75 + Math.random() * 0.25,
-      });
-      const mesh = new THREE.Mesh(nodeGeom, mat);
-      const theta = Math.random() * Math.PI * 2;
-      const phi   = Math.acos(2 * Math.random() - 1);
-      const r     = 15 + Math.random() * 30;
-      mesh.position.set(
-        r * Math.sin(phi) * Math.cos(theta),
-        r * Math.sin(phi) * Math.sin(theta) * 0.5,
-        r * Math.cos(phi) * 0.4
-      );
-      mesh.userData = {
-        ox: mesh.position.x, oy: mesh.position.y, oz: mesh.position.z,
-        speed: 0.3 + Math.random() * 0.9,
-        offset: Math.random() * Math.PI * 2,
-      };
-      scene.add(mesh);
-      nodeMeshes.push(mesh);
-      nodePositions.push(mesh.position);
-    }
-
-    // ── Edges (connect nearby nodes) ───────────────────────────
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: 0x5b6af9, transparent: true,
-      opacity: isDark ? 0.18 : 0.12,
-    });
-    const MAX_DIST = 18;
-    const edgeLines = [];
-
-    for (let i = 0; i < NODE_COUNT; i++) {
-      for (let j = i + 1; j < NODE_COUNT; j++) {
-        const d = nodePositions[i].distanceTo(nodePositions[j]);
-        if (d < MAX_DIST) {
-          const geo  = new THREE.BufferGeometry().setFromPoints([
-            nodePositions[i].clone(), nodePositions[j].clone()
-          ]);
-          const line = new THREE.Line(geo, edgeMat);
-          scene.add(line);
-          edgeLines.push({ line, i, j });
-        }
-      }
-    }
-
-    // ── Group for rotation ──────────────────────────────────────
-    const group = new THREE.Group();
-    nodeMeshes.forEach(m => group.add(m));
-    edgeLines.forEach(({ line }) => group.add(line));
-    scene.add(group);
-
-    // ── Animate ─────────────────────────────────────────────────
-    let t = 0;
-    const animate = () => {
-      frameRef.current = requestAnimationFrame(animate);
-      t += 0.004;
-
-      // Node drift
-      nodeMeshes.forEach(m => {
-        m.position.y = m.userData.oy + Math.sin(t * m.userData.speed + m.userData.offset) * 1.4;
-      });
-
-      // Update edge endpoints
-      edgeLines.forEach(({ line, i, j }) => {
-        const pts = [nodeMeshes[i].position.clone(), nodeMeshes[j].position.clone()];
-        line.geometry.setFromPoints(pts);
-      });
-
-      // Mouse parallax
-      group.rotation.y = t * 0.06 + mouseRef.current.x * 0.15;
-      group.rotation.x = Math.sin(t * 0.04) * 0.08 + mouseRef.current.y * 0.1;
-
-      camera.position.x = Math.sin(t * 0.05) * 2;
-      camera.lookAt(0, 0, 0);
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    const onResize = () => {
-      const w = canvas.offsetWidth, h = canvas.offsetHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener("resize", onResize);
-
-    return () => {
-      cancelAnimationFrame(frameRef.current);
-      window.removeEventListener("resize", onResize);
-      renderer.dispose();
-    };
-  }, [isDark]);
-
-  const onMouseMove = useCallback((e) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    mouseRef.current = {
-      x: ((e.clientX - rect.left) / rect.width  - 0.5) * 2,
-      y: ((e.clientY - rect.top ) / rect.height - 0.5) * 2,
-    };
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      onMouseMove={onMouseMove}
-      style={{ width: "100%", height: "100%", display: "block" }}
-    />
-  );
-}
 
 // ─── REUSABLE COMPONENTS ──────────────────────────────────────
 
@@ -546,6 +422,166 @@ function NavBar({ isDark, onToggle, onGetStarted }) {
   );
 }
 
+// ─── ANIMATED MOCKUP (HERO RIGHT SIDE) ────────────────────────
+function AnimatedMockup() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep(s => (s + 1) % 3);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div style={{
+      position: "relative",
+      width: "100%",
+      aspectRatio: "4/3",
+      background: "var(--bg-card)",
+      border: "1px solid var(--border)",
+      borderRadius: 16,
+      boxShadow: "var(--shadow-lg)",
+      overflow: "hidden",
+    }}>
+      {/* Mac-like header */}
+      <div style={{
+        height: 36, borderBottom: "1px solid var(--border)",
+        background: "var(--bg-card-2)",
+        display: "flex", alignItems: "center", padding: "0 16px", gap: 6,
+      }}>
+        <div style={{width: 10, height: 10, borderRadius: "50%", background: "var(--red)"}}/>
+        <div style={{width: 10, height: 10, borderRadius: "50%", background: "var(--amber)"}}/>
+        <div style={{width: 10, height: 10, borderRadius: "50%", background: "var(--green)"}}/>
+      </div>
+
+      <div style={{ position: "relative", height: "calc(100% - 36px)", padding: 24 }}>
+        
+        {/* Step 1: Upload CSV */}
+        <div style={{
+          position: "absolute", inset: 24,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          opacity: step === 0 ? 1 : 0,
+          transform: step === 0 ? "translateY(0)" : "translateY(-20px)",
+          transition: "all 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+          pointerEvents: step === 0 ? "auto" : "none",
+          border: "2px dashed var(--border)", borderRadius: 12,
+          background: "var(--bg-card-2)"
+        }}>
+          <div className={step === 0 ? "float-anim" : ""} style={{
+            width: 56, height: 56, borderRadius: 16,
+            background: "var(--accent-soft)", color: "var(--accent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 16,
+          }}>
+            <FileText size={28} />
+          </div>
+          <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>
+            sales_data_q3.csv
+          </h3>
+          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Uploading and analyzing...</p>
+          <div style={{ width: 140, height: 4, background: "var(--border)", borderRadius: 2, marginTop: 16, overflow: "hidden" }}>
+            <div style={{ 
+               height: "100%", background: "var(--accent)", 
+               width: step === 0 ? "100%" : "0%", transition: "width 4s linear" 
+            }} />
+          </div>
+        </div>
+
+        {/* Step 2: Chat Interface */}
+        <div style={{
+          position: "absolute", inset: 24,
+          display: "flex", flexDirection: "column", gap: 16,
+          opacity: step === 1 ? 1 : 0,
+          transform: step === 1 ? "translateY(0)" : step > 1 ? "translateY(-20px)" : "translateY(20px)",
+          transition: "all 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+          pointerEvents: step === 1 ? "auto" : "none",
+        }}>
+          <div style={{
+            alignSelf: "flex-end", background: "var(--accent)", color: "#fff",
+            padding: "10px 16px", borderRadius: "16px 16px 4px 16px",
+            fontSize: "0.9rem", boxShadow: "0 4px 12px var(--accent-glow)",
+            maxWidth: "85%", transform: step === 1 ? "translateY(0)" : "translateY(10px)",
+            opacity: step === 1 ? 1 : 0, transition: "all 0.4s ease 0.3s"
+          }}>
+            Show me monthly revenue for Q3 compared to Q2.
+          </div>
+          <div style={{
+            alignSelf: "flex-start", display: "flex", gap: 12, maxWidth: "85%",
+            transform: step === 1 ? "translateY(0)" : "translateY(10px)",
+            opacity: step === 1 ? 1 : 0, transition: "all 0.4s ease 0.9s"
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 8, background: "var(--accent-soft)",
+              color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+            }}>
+              <Brain size={16} />
+            </div>
+            <div style={{
+               background: "var(--bg-card-2)", border: "1px solid var(--border)",
+               padding: "12px 16px", borderRadius: "4px 16px 16px 16px",
+               fontSize: "0.9rem", color: "var(--text-muted)", lineHeight: 1.6
+            }}>
+              Analyzing your data... <br/>
+              Found 12,450 rows. Grouping by month and calculating revenue sum.
+            </div>
+          </div>
+        </div>
+
+        {/* Step 3: Chart Visualization */}
+        <div style={{
+          position: "absolute", inset: 24,
+          display: "flex", flexDirection: "column",
+          opacity: step === 2 ? 1 : 0,
+          transform: step === 2 ? "translateY(0)" : "translateY(20px)",
+          transition: "all 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
+          pointerEvents: step === 2 ? "auto" : "none",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div>
+              <h3 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>Q3 Revenue</h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--green)" }}>+24.5% vs Q2</p>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)" }}/>
+                 <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Q3</span>
+               </div>
+               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--border)" }}/>
+                 <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Q2</span>
+               </div>
+            </div>
+          </div>
+          
+          {/* Mock Chart */}
+          <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: "6%", paddingBottom: 10 }}>
+            {[35, 60, 45, 75, 55, 85, 65].map((h, i) => (
+              <div key={i} style={{
+                flex: 1, position: "relative",
+                display: "flex", alignItems: "flex-end",
+              }}>
+                <div style={{
+                  width: "100%", background: i % 2 === 0 ? "var(--border)" : "var(--accent)",
+                  height: step === 2 ? `${h}%` : "0%",
+                  borderRadius: "4px 4px 0 0",
+                  transition: `height 0.8s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.08 + 0.3}s`
+                }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'].map(m => (
+              <span key={m} style={{ fontSize: 10, color: "var(--text-sub)" }}>{m}</span>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── HERO SECTION ─────────────────────────────────────────────
 function Hero({ isDark, onGetStarted }) {
   return (
@@ -555,148 +591,155 @@ function Hero({ isDark, onGetStarted }) {
       overflow: "hidden",
       background: "var(--bg)",
     }}>
-      {/* 3D canvas — full background */}
+      {/* Background — Abstract Glowing Orbs & Grid */}
       <div style={{
         position: "absolute", inset: 0,
-        opacity: isDark ? 0.9 : 0.55,
-        transition: "opacity .5s ease",
+        overflow: "hidden", pointerEvents: "none",
+        background: isDark ? "#05050f" : "#f2f2f8",
+        transition: "background .5s ease",
       }}>
-        <NeuralNetCanvas isDark={isDark} />
+        {/* Abstract Glowing Orbs */}
+        <div style={{
+          position: "absolute", top: "10%", left: "15%",
+          width: "45vw", height: "45vw", borderRadius: "50%",
+          background: "var(--accent)",
+          opacity: isDark ? 0.15 : 0.08,
+          filter: "blur(120px)",
+          animation: "blob-anim-1 20s ease-in-out infinite",
+        }} />
+        <div style={{
+          position: "absolute", bottom: "5%", right: "10%",
+          width: "40vw", height: "40vw", borderRadius: "50%",
+          background: "var(--amber)",
+          opacity: isDark ? 0.12 : 0.06,
+          filter: "blur(140px)",
+          animation: "blob-anim-2 25s ease-in-out infinite reverse",
+        }} />
+
+        {/* Subtle Grid Base */}
+        <div className="grid-bg" style={{
+          position: "absolute", inset: "-50%",
+          opacity: isDark ? 0.4 : 0.25,
+          transform: "perspective(1000px) rotateX(60deg) translateY(-100px) scale(2.5)",
+          transformOrigin: "top center",
+        }} />
+
+        {/* Radial Fade Overlay */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: isDark
+            ? "radial-gradient(circle at center, transparent 0%, var(--bg) 65%)"
+            : "radial-gradient(circle at center, transparent 0%, var(--bg) 65%)",
+        }} />
       </div>
-
-      {/* Radial bloom */}
-      <div style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        background: isDark
-          ? "radial-gradient(ellipse 70% 55% at 50% 45%, rgba(91,106,249,0.10) 0%, transparent 70%)"
-          : "radial-gradient(ellipse 70% 55% at 50% 45%, rgba(67,56,202,0.07) 0%, transparent 70%)",
-      }} />
-
-      {/* Bottom fade */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0, height: 240,
-        background: "linear-gradient(to top, var(--bg), transparent)",
-        pointerEvents: "none",
-      }} />
 
       {/* Hero content */}
       <div style={{
         position: "relative", zIndex: 1,
-        maxWidth: 860, margin: "0 auto",
-        padding: "120px clamp(20px,5vw,48px) 80px",
-        textAlign: "center",
-      }}>
-        {/* Badge */}
-        <div className="fade-up-1" style={{
-          display: "inline-flex", alignItems: "center", gap: 7,
-          padding: "5px 14px", borderRadius: 20,
-          background: "var(--accent-soft)",
-          border: "1px solid var(--border-glow)",
-          marginBottom: 28,
-        }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: "50%",
-            background: "var(--amber)", display: "inline-block",
-            boxShadow: "0 0 8px var(--amber)", animation: "glow 2s ease-in-out infinite",
-          }} />
-          <span style={{
-            fontSize: 11, fontWeight: 600,
-            letterSpacing: "0.07em", textTransform: "uppercase",
-            color: "var(--accent)",
+        width: "100%", maxWidth: 1240, margin: "0 auto",
+        padding: "120px clamp(24px, 5vw, 48px) 80px",
+        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center",
+      }} className="mobile-stack">
+        
+        {/* Left Side: Copy & CTAs */}
+        <div style={{ textAlign: "left" }}>
+          {/* Badge */}
+          <div className="fade-up-1" style={{ marginBottom: 28 }}>
+            <div className="blink-anim" style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              padding: "5px 14px", borderRadius: 20,
+              background: "var(--accent-soft)",
+              border: "1px solid var(--border-glow)",
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: "var(--amber)", display: "inline-block",
+                boxShadow: "0 0 8px var(--amber)", animation: "glow 2s ease-in-out infinite",
+              }} />
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                letterSpacing: "0.07em", textTransform: "uppercase",
+                color: "var(--accent)",
+              }}>
+                AI-Powered Business Intelligence
+              </span>
+            </div>
+          </div>
+
+          {/* Headline */}
+          <h1 className="fade-up-2" style={{
+            fontFamily: "'DM Serif Display', serif",
+            fontSize: "clamp(2.5rem, 4.5vw, 4.2rem)",
+            fontWeight: 400, lineHeight: 1.05,
+            letterSpacing: "-0.03em", color: "var(--text)",
+            marginBottom: 24,
           }}>
-            AI-Powered Business Intelligence
-          </span>
+            Turn Your CSV Data Into<br />
+            <span className="gradient-text">Insights With AI.</span>
+          </h1>
+
+          {/* Subheading */}
+          <p className="fade-up-3" style={{
+            fontSize: "clamp(1rem, 1.3vw, 1.15rem)",
+            color: "var(--text-muted)", lineHeight: 1.7,
+            marginBottom: 40, fontWeight: 400,
+            maxWidth: 540,
+          }}>
+            Upload your business data and ask questions in plain English. 
+            Instantly generate answers, charts, and interactive dashboards.
+          </p>
+
+          {/* CTAs */}
+          <div className="fade-up-4" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <BtnPrimary onClick={onGetStarted} large>
+              Get Started <ArrowRight size={18} />
+            </BtnPrimary>
+          </div>
         </div>
 
-        {/* Headline */}
-        <h1 className="fade-up-2" style={{
-          fontFamily: "'DM Serif Display', serif",
-          fontSize: "clamp(2.8rem, 7vw, 5.2rem)",
-          fontWeight: 400, lineHeight: 1.06,
-          letterSpacing: "-0.03em", color: "var(--text)",
-          marginBottom: 22,
-        }}>
-          Your data speaks.
-          <br />
-          <span className="gradient-text">Ask it anything.</span>
-        </h1>
+        {/* Right Side: Animated Mockup */}
+        <div className="fade-up-3" style={{ position: "relative", zIndex: 10 }}>
+          <AnimatedMockup />
+          
+          {/* Floating Accents */}
+          <div className="float-anim" style={{
+            position: "absolute", top: -24, right: -24,
+            background: "var(--bg-card)", border: "1px solid var(--border)",
+            padding: "12px 16px", borderRadius: 12,
+            boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: 10,
+            animationDelay: "1s"
+          }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green)", boxShadow: "0 0 8px var(--green)" }} />
+            <span style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text)" }}>Database Connected</span>
+          </div>
 
-        {/* Subheading */}
-        <p className="fade-up-3" style={{
-          fontSize: "clamp(1rem, 2vw, 1.18rem)",
-          color: "var(--text-muted)", lineHeight: 1.75,
-          maxWidth: 540, margin: "0 auto 40px",
-          fontWeight: 400,
-        }}>
-          Upload any dataset and instantly get an intelligent dashboard.
-          Ask business questions in plain English. Get charts, insights,
-          and reports — no SQL required.
-        </p>
-
-        {/* Sample queries */}
-        <div className="fade-up-4" style={{
-          display: "flex", flexWrap: "wrap", gap: 8,
-          justifyContent: "center", marginBottom: 40,
-        }}>
-          {[
-            "Show monthly revenue by region",
-            "Why are Electronics outperforming?",
-            "Compare Q3 vs Q4 performance",
-          ].map(q => (
-            <div key={q} style={{
-              padding: "7px 13px", borderRadius: 8,
-              background: "var(--bg-card)", border: "1px solid var(--border)",
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 12, color: "var(--text-muted)",
-              transition: "all .2s", cursor: "pointer",
-            }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = "var(--border-glow)";
-                e.currentTarget.style.color = "var(--accent)";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = "var(--border)";
-                e.currentTarget.style.color = "var(--text-muted)";
-              }}
-            >"{q}"</div>
-          ))}
+          <div className="float-anim" style={{
+            position: "absolute", bottom: -20, left: -24,
+            background: "var(--bg-card)", border: "1px solid var(--border)",
+            padding: "14px", borderRadius: 12,
+            boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: 12,
+            animationDelay: "0s"
+          }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--accent-soft)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <TrendingUp size={18} />
+            </div>
+            <div>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Total Rows Analyzed</p>
+              <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text)", fontFamily: "'JetBrains Mono', monospace" }}>2,450,192</p>
+            </div>
+          </div>
         </div>
 
-        {/* CTAs */}
-        <div className="fade-up-5" style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <BtnPrimary onClick={onGetStarted} large>
-            Start for Free <ArrowRight size={16} />
-          </BtnPrimary>
-          <BtnGhost>
-            <Github size={15} /> View on GitHub
-          </BtnGhost>
-        </div>
-
-        <p className="fade-up-5" style={{
-          marginTop: 24, fontSize: 12, color: "var(--text-sub)",
-        }}>
-          Free · Upload any CSV or Excel · No SQL required
-        </p>
       </div>
 
-      {/* Scroll indicator */}
+      {/* Bottom fade */}
       <div style={{
-        position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-        animation: "float 2.5s ease-in-out infinite",
-      }}>
-        <div style={{
-          width: 22, height: 36, borderRadius: 11,
-          border: "2px solid var(--border)",
-          display: "flex", justifyContent: "center", paddingTop: 5,
-        }}>
-          <div style={{
-            width: 3, height: 7, borderRadius: 2,
-            background: "var(--accent)",
-            animation: "float 1.4s ease-in-out infinite",
-          }} />
-        </div>
-      </div>
+        position: "absolute", bottom: 0, left: 0, right: 0, height: 160,
+        background: "linear-gradient(to top, var(--bg), transparent)",
+        pointerEvents: "none",
+        zIndex: 2,
+      }} />
+
     </section>
   );
 }
