@@ -33,7 +33,11 @@ async def exchange_code_for_user(code: str) -> dict:
                 "grant_type": "authorization_code",
             },
         )
-        token_response.raise_for_status()
+        if token_response.status_code != 200:
+            error_data = token_response.json()
+            error_msg = error_data.get("error_description", error_data.get("error", "Unknown error"))
+            raise ValueError(f"Google token exchange failed ({token_response.status_code}): {error_msg}")
+        
         token_payload = token_response.json()
 
         access_token = token_payload.get("access_token")

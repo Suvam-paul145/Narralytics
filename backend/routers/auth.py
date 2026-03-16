@@ -30,8 +30,10 @@ async def callback(code: str):
         )
         return RedirectResponse(url=f"{settings.FRONTEND_URL}/auth/callback#token={token}")
     except Exception as exc:
+        import urllib.parse
+        error_msg = urllib.parse.quote(str(exc))
         print(f"Auth error: {exc}")
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}?auth_error=true")
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}?auth_error=true&error_msg={error_msg}")
 
 
 @router.get("/me")
