@@ -165,6 +165,32 @@ function applyTheme(isDark) {
 
 // ─── REUSABLE COMPONENTS ──────────────────────────────────────
 
+function Reveal({ children, delay = 0, className = "", style = {} }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = 1;
+        entry.target.style.transform = "translateY(0)";
+        observer.unobserve(entry.target);
+      }
+    }, { threshold: 0.1, rootMargin: "0px 0px -50px 0px" });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={className} style={{
+      opacity: 0,
+      transform: "translateY(30px)",
+      transition: `all 0.8s cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms`,
+      ...style
+    }}>
+      {children}
+    </div>
+  );
+}
+
 // Section label (small all-caps above section title)
 function EyebrowLabel({ children }) {
   return (
@@ -232,97 +258,123 @@ function BtnGhost({ children, onClick }) {
 // Feature card
 function FeatureCard({ icon: Icon, color, title, desc, delay = 0 }) {
   return (
-    <div className="hover-lift" style={{
-      background: "var(--bg-card)", borderRadius: 16,
-      border: "1px solid var(--border)", padding: "28px 24px",
-      boxShadow: "var(--shadow)", animationDelay: `${delay}ms`,
-      cursor: "default",
-    }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = color + "60";
-        e.currentTarget.style.boxShadow = `0 16px 48px ${color}18`;
+    <Reveal delay={delay}>
+      <div className="hover-lift" style={{
+        background: "var(--bg-card)", borderRadius: 16,
+        border: "1px solid var(--border)", padding: "32px 28px",
+        boxShadow: "var(--shadow)", cursor: "default",
+        display: "flex", flexDirection: "column", height: "100%",
+        position: "relative", overflow: "hidden",
       }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = "var(--border)";
-        e.currentTarget.style.boxShadow = "var(--shadow)";
-      }}
-    >
-      <div style={{
-        width: 44, height: 44, borderRadius: 12,
-        background: color + "18", border: `1px solid ${color}28`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        marginBottom: 16, color,
-      }}>
-        <Icon size={20} />
+        onMouseEnter={e => {
+          e.currentTarget.style.borderColor = color + "60";
+          e.currentTarget.style.boxShadow = `0 16px 48px ${color}18`;
+          if (e.currentTarget.children[1]) {
+            e.currentTarget.children[1].style.transform = "scale(1.1) rotate(5deg)";
+          }
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.borderColor = "var(--border)";
+          e.currentTarget.style.boxShadow = "var(--shadow)";
+          if (e.currentTarget.children[1]) {
+            e.currentTarget.children[1].style.transform = "scale(1) rotate(0deg)";
+          }
+        }}
+      >
+        <div style={{
+          position: "absolute", top: 0, right: 0, width: "150px", height: "150px",
+          background: `radial-gradient(circle at top right, ${color}10, transparent 70%)`,
+          pointerEvents: "none", transition: "opacity 0.3s ease",
+        }} />
+        <div style={{
+          width: 48, height: 48, borderRadius: 14,
+          background: color + "18", border: `1px solid ${color}28`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 20, color, transition: "transform 0.3s ease",
+        }}>
+          <Icon size={22} />
+        </div>
+        <h3 style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: "1.1rem", fontWeight: 600,
+          color: "var(--text)", marginBottom: 10, letterSpacing: "-0.015em",
+        }}>{title}</h3>
+        <p style={{ fontSize: "0.95rem", color: "var(--text-muted)", lineHeight: 1.6 }}>{desc}</p>
       </div>
-      <h3 style={{
-        fontFamily: "'DM Sans', sans-serif",
-        fontSize: "0.95rem", fontWeight: 600,
-        color: "var(--text)", marginBottom: 8, letterSpacing: "-0.015em",
-      }}>{title}</h3>
-      <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</p>
-    </div>
+    </Reveal>
   );
 }
 
 // Step card
-function StepCard({ number, icon: Icon, title, desc, color }) {
+function StepCard({ number, icon: Icon, title, desc, color, delay = 0 }) {
   return (
-    <div style={{
-      display: "flex", gap: 20, padding: "24px",
-      background: "var(--bg-card)", borderRadius: 16,
-      border: "1px solid var(--border)",
-    }}>
-      <div style={{ flexShrink: 0 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          background: `${color}18`,
-          border: `1px solid ${color}28`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color,
-        }}>
-          <Icon size={22} />
+    <Reveal delay={delay}>
+      <div className="hover-lift" style={{
+        display: "flex", gap: 24, padding: "32px",
+        background: "var(--bg-card)", borderRadius: 16,
+        border: "1px solid var(--border)", alignItems: "flex-start",
+        position: "relative", overflow: "hidden", transition: "all 0.3s ease",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = color + "60"; e.currentTarget.style.background = "var(--bg-card-2)"; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}
+      >
+        <div style={{ flexShrink: 0 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14,
+            background: `${color}18`,
+            border: `1px solid ${color}28`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color, boxShadow: `0 4px 20px ${color}15`,
+          }}>
+            <Icon size={24} />
+          </div>
+        </div>
+        <div>
+          <p style={{
+            fontSize: 12, fontWeight: 700, letterSpacing: "0.15em",
+            textTransform: "uppercase", color: "var(--accent)",
+            marginBottom: 8, display: "inline-flex", alignItems: "center", background: "var(--accent-soft)", padding: "4px 10px", borderRadius: 20,
+          }}>Step {number}</p>
+          <h3 style={{
+            fontSize: "1.2rem", fontWeight: 600,
+            color: "var(--text)", marginBottom: 8, letterSpacing: "-0.015em",
+          }}>{title}</h3>
+          <p style={{ fontSize: "1rem", color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</p>
         </div>
       </div>
-      <div>
-        <p style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
-          textTransform: "uppercase", color: "var(--text-sub)",
-          marginBottom: 4,
-        }}>Step {number}</p>
-        <h3 style={{
-          fontSize: "1rem", fontWeight: 600,
-          color: "var(--text)", marginBottom: 6, letterSpacing: "-0.015em",
-        }}>{title}</h3>
-        <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.7 }}>{desc}</p>
-      </div>
-    </div>
+    </Reveal>
   );
 }
 
 // Stat card
-function StatCard({ value, label, icon: Icon, color }) {
+function StatCard({ value, label, icon: Icon, color, delay = 0 }) {
   return (
-    <div style={{
-      textAlign: "center", padding: "28px 20px",
-      background: "var(--bg-card)", borderRadius: 16,
-      border: "1px solid var(--border)",
-    }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: 9,
-        background: `${color}18`, color,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        margin: "0 auto 14px",
+    <Reveal delay={delay}>
+      <div className="hover-lift" style={{
+        textAlign: "center", padding: "36px 20px",
+        background: "var(--bg-card)", borderRadius: 16,
+        border: "1px solid var(--border)", position: "relative", overflow: "hidden"
       }}>
-        <Icon size={17} />
+        <div style={{
+          position: "absolute", bottom: "-20px", left: "50%", transform: "translateX(-50%)", width: "100%", height: "50%",
+          background: `radial-gradient(ellipse at bottom, ${color}15, transparent 70%)`, pointerEvents: "none"
+        }} />
+        <div style={{
+          width: 44, height: 44, borderRadius: 12,
+          background: `${color}18`, color,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 16px", border: `1px solid ${color}28`
+        }}>
+          <Icon size={20} />
+        </div>
+        <p style={{
+          fontFamily: "'DM Serif Display', serif",
+          fontSize: "2.8rem", fontWeight: 400,
+          color: "var(--text)", lineHeight: 1, marginBottom: 8,
+        }}>{value}</p>
+        <p style={{ fontSize: "0.95rem", color: "var(--text-muted)", fontWeight: 500 }}>{label}</p>
       </div>
-      <p style={{
-        fontFamily: "'DM Serif Display', serif",
-        fontSize: "2.2rem", fontWeight: 400,
-        color: "var(--text)", lineHeight: 1, marginBottom: 6,
-      }}>{value}</p>
-      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500 }}>{label}</p>
-    </div>
+    </Reveal>
   );
 }
 
@@ -769,19 +821,24 @@ function FeaturesSection() {
       }} />
 
       <div style={{ maxWidth: 1100, margin: "0 auto", position: "relative", zIndex: 1 }}>
-        <div style={{ textAlign: "center", marginBottom: 60 }}>
-          <EyebrowLabel>Features</EyebrowLabel>
-          <SectionTitle center>
-            Everything you need to
-            <br />
-            <em>understand your data</em>
-          </SectionTitle>
-        </div>
+        <Reveal>
+          <div style={{ textAlign: "center", marginBottom: 72 }}>
+            <EyebrowLabel>Features</EyebrowLabel>
+            <SectionTitle center>
+              Everything you need to
+              <br />
+              <em style={{ color: "var(--accent)", fontStyle: "normal" }}>understand your data</em>
+            </SectionTitle>
+            <p style={{ fontSize: "1.15rem", color: "var(--text-muted)", maxWidth: 640, margin: "20px auto 0", lineHeight: 1.6 }}>
+              A complete toolkit combining the power of natural language processing with robust data analytics and visualization.
+            </p>
+          </div>
+        </Reveal>
 
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(3,1fr)",
-          gap: 18,
+          gap: 24,
         }} className="mobile-stack" id="features-grid">
           {features.map((f, i) => (
             <FeatureCard key={i} {...f} delay={i * 70} />
@@ -807,13 +864,15 @@ function HowItWorks() {
       borderTop: "1px solid var(--border)",
       borderBottom: "1px solid var(--border)",
     }}>
-      <div style={{ maxWidth: 860, margin: "0 auto" }}>
-        <div style={{ marginBottom: 52 }}>
-          <EyebrowLabel>How it Works</EyebrowLabel>
-          <SectionTitle>From upload to insight<br />in three steps</SectionTitle>
-        </div>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <Reveal>
+          <div style={{ marginBottom: 60, textAlign: "center" }}>
+            <EyebrowLabel>How it Works</EyebrowLabel>
+            <SectionTitle center>From upload to insight<br />in three steps</SectionTitle>
+          </div>
+        </Reveal>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           {steps.map((s, i) => <StepCard key={i} number={i + 1} {...s} />)}
         </div>
       </div>
@@ -837,9 +896,9 @@ function Stats() {
     }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16,
+          display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 24,
         }} className="mobile-2col">
-          {stats.map((s, i) => <StatCard key={i} {...s} />)}
+          {stats.map((s, i) => <StatCard key={i} delay={i * 100} {...s} />)}
         </div>
       </div>
     </section>
@@ -850,95 +909,118 @@ function Stats() {
 function CTASection({ onGetStarted }) {
   return (
     <section id="pricing" style={{
-      padding: "100px clamp(20px,5vw,64px)",
-      background: "var(--bg-card-2)",
-      borderTop: "1px solid var(--border)",
+      padding: "120px clamp(20px,5vw,64px)",
+      background: "var(--bg)",
       position: "relative", overflow: "hidden",
     }}>
-      {/* Glow orb */}
-      <div style={{
-        position: "absolute", top: "50%", left: "50%",
-        transform: "translate(-50%, -50%)",
-        width: 400, height: 200, borderRadius: "50%",
-        background: "radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-
-      <div style={{
-        maxWidth: 620, margin: "0 auto",
-        textAlign: "center", position: "relative", zIndex: 1,
-      }}>
+      <Reveal>
         <div style={{
-          display: "inline-flex", alignItems: "center", gap: 7,
-          padding: "5px 14px", borderRadius: 20,
-          background: "var(--accent-soft)", border: "1px solid var(--border-glow)",
-          marginBottom: 28,
+          maxWidth: 900, margin: "0 auto", position: "relative", zIndex: 1,
         }}>
-          <Star size={12} color="var(--amber)" fill="var(--amber)" />
-          <span style={{
-            fontSize: 11, fontWeight: 600, letterSpacing: "0.07em",
-            textTransform: "uppercase", color: "var(--accent)",
-          }}>Free to use</span>
-        </div>
+          <div style={{
+            background: "var(--bg-card-2)", borderRadius: 32,
+            padding: "80px clamp(24px, 6vw, 80px)",
+            border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)",
+            overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center",
+            position: "relative",
+          }}>
+            {/* Subtle grid background inside CTA */}
+            <div className="grid-bg" style={{
+              position: "absolute", inset: 0, opacity: 0.5,
+              maskImage: "radial-gradient(circle at top center, black 0%, transparent 80%)",
+              WebkitMaskImage: "radial-gradient(circle at top center, black 0%, transparent 80%)",
+              pointerEvents: "none",
+            }} />
+            
+            <div style={{
+              position: "absolute", top: "-50%", left: "50%",
+              transform: "translateX(-50%)", width: 600, height: 400, borderRadius: "50%",
+              background: "radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%)",
+              pointerEvents: "none",
+            }} />
 
-        <h2 style={{
-          fontFamily: "'DM Serif Display', serif",
-          fontSize: "clamp(2.2rem, 5vw, 3.6rem)",
-          fontWeight: 400, lineHeight: 1.08,
-          letterSpacing: "-0.03em", color: "var(--text)",
-          marginBottom: 18,
-        }}>
-          Ready to talk<br />
-          <span className="gradient-text">to your data?</span>
-        </h2>
-
-        <p style={{
-          fontSize: "1.05rem", color: "var(--text-muted)",
-          lineHeight: 1.7, marginBottom: 40,
-        }}>
-          Upload any dataset and start asking questions in seconds.
-          No setup, no SQL, no waiting.
-        </p>
-
-        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <BtnPrimary onClick={onGetStarted} large>
-            Get Started Free <ArrowRight size={16} />
-          </BtnPrimary>
-        </div>
-
-        {/* Plan comparison */}
-        <div style={{
-          marginTop: 48, display: "grid",
-          gridTemplateColumns: "1fr 1fr", gap: 16,
-          textAlign: "left",
-        }} className="mobile-stack">
-          {[
-            { label: "Free", features: ["5 datasets", "Auto dashboard", "Natural language queries", "PDF export"] },
-            { label: "Pro — coming soon", features: ["Unlimited datasets", "Voice assistant", "Advanced forecasting", "Team sharing", "Priority LLM"] },
-          ].map((plan, pi) => (
-            <div key={pi} style={{
-              padding: "22px", borderRadius: 14,
-              background: pi === 1 ? "var(--accent-soft)" : "var(--bg-card)",
-              border: `1px solid ${pi === 1 ? "var(--border-glow)" : "var(--border)"}`,
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              padding: "6px 16px", borderRadius: 30,
+              background: "var(--bg-card)", border: "1px solid var(--border-glow)",
+              marginBottom: 32, position: "relative"
             }}>
-              <p style={{
-                fontSize: "0.85rem", fontWeight: 700,
-                color: pi === 1 ? "var(--accent)" : "var(--text-muted)",
-                marginBottom: 12, letterSpacing: "0.04em",
-              }}>{plan.label}</p>
-              {plan.features.map(f => (
-                <div key={f} style={{
-                  display: "flex", gap: 8, alignItems: "flex-start",
-                  marginBottom: 7,
-                }}>
-                  <Check size={13} color="var(--green)" style={{ flexShrink: 0, marginTop: 2 }} />
-                  <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>{f}</span>
-                </div>
-              ))}
+              <Star size={14} color="var(--amber)" fill="var(--amber)" />
+              <span style={{
+                fontSize: 12, fontWeight: 700, letterSpacing: "0.1em",
+                textTransform: "uppercase", color: "var(--text)",
+              }}>Free to use</span>
             </div>
-          ))}
+
+            <h2 style={{
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: "clamp(2.5rem, 6vw, 4rem)",
+              fontWeight: 400, lineHeight: 1.05,
+              letterSpacing: "-0.03em", color: "var(--text)",
+              marginBottom: 24, position: "relative"
+            }}>
+              Ready to talk<br />
+              <span className="gradient-text">to your data?</span>
+            </h2>
+
+            <p style={{
+              fontSize: "1.15rem", color: "var(--text-muted)",
+              lineHeight: 1.7, marginBottom: 48, maxWidth: 540, position: "relative"
+            }}>
+              Upload any dataset and start asking questions in seconds.
+              No setup, no SQL, no wait times. Experience the future of analytics.
+            </p>
+
+            <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap", position: "relative" }}>
+              <BtnPrimary onClick={onGetStarted} large>
+                Get Started Free <ArrowRight size={18} />
+              </BtnPrimary>
+            </div>
+          </div>
+
+          {/* Plan comparison */}
+          <div style={{
+            marginTop: 40, display: "grid",
+            gridTemplateColumns: "1fr 1fr", gap: 24,
+          }} className="mobile-stack">
+            {[
+              { label: "Free", color: "var(--accent)", features: ["5 datasets", "Auto dashboard", "Natural language queries", "PDF export"] },
+              { label: "Pro — coming soon", color: "var(--amber)", features: ["Unlimited datasets", "Voice assistant", "Advanced forecasting", "Team sharing"] },
+            ].map((plan, pi) => (
+              <div key={pi} className="hover-lift" style={{
+                padding: "32px", borderRadius: 24,
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                display: "flex", flexDirection: "column",
+                position: "relative", overflow: "hidden", cursor: "default",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = plan.color + "60"; e.currentTarget.style.boxShadow = `0 12px 40px ${plan.color}15`; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
+              >
+                <div style={{
+                  position: "absolute", top: 0, left: 0, width: "100%", height: 4,
+                  background: pi === 1 ? "var(--gradient)" : "var(--accent)", opacity: 0.8
+                }} />
+                <p style={{
+                  fontSize: "1.2rem", fontWeight: 700,
+                  color: "var(--text)",
+                  marginBottom: 24, letterSpacing: "-0.01em",
+                }}>{plan.label}</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {plan.features.map(f => (
+                    <div key={f} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: `${plan.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: plan.color }}>
+                        <Check size={14} />
+                      </div>
+                      <span style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: 500 }}>{f}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -948,45 +1030,50 @@ function Footer() {
   return (
     <footer style={{
       borderTop: "1px solid var(--border)",
-      padding: "32px clamp(20px,5vw,64px)",
-      background: "var(--bg)",
+      padding: "48px clamp(20px,5vw,64px)",
+      background: "var(--bg-card)",
     }}>
       <div style={{
         maxWidth: 1100, margin: "0 auto",
         display: "flex", justifyContent: "space-between",
-        alignItems: "center", flexWrap: "wrap", gap: 16,
+        alignItems: "center", flexWrap: "wrap", gap: 32,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
-            width: 26, height: 26, borderRadius: 7,
+            width: 32, height: 32, borderRadius: 10,
             background: "var(--accent)",
             display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 12px var(--accent-glow)"
           }}>
-            <Brain size={13} color="#fff" />
+            <Brain size={18} color="#fff" />
           </div>
           <span style={{
             fontFamily: "'DM Serif Display', serif",
-            fontSize: "0.95rem", color: "var(--text)",
+            fontSize: "1.2rem", color: "var(--text)", letterSpacing: "-0.02em"
           }}>
             Narra<span style={{ color: "var(--accent)" }}>lytics</span>
           </span>
         </div>
 
-        <div className="hide-mobile" style={{ display: "flex", gap: 28 }}>
-          {["Features", "GitHub", "Documentation"].map(l => (
-            <a key={l} href="#" style={{
-              fontSize: 13, color: "var(--text-muted)", textDecoration: "none",
-              transition: "color .2s",
+        <div className="hide-mobile" style={{ display: "flex", gap: 32 }}>
+          {["Product", "Features", "Pricing", "Documentation", "GitHub"].map(l => (
+            <a key={l} href="#" className="transition-all" style={{
+              fontSize: "0.9rem", fontWeight: 500, color: "var(--text-muted)", textDecoration: "none",
             }}
-              onMouseEnter={e => e.target.style.color = "var(--text)"}
-              onMouseLeave={e => e.target.style.color = "var(--text-muted)"}
+              onMouseEnter={e => { e.target.style.color = "var(--text)"; e.target.style.transform = "translateY(-1px)"; }}
+              onMouseLeave={e => { e.target.style.color = "var(--text-muted)"; e.target.style.transform = "translateY(0)"; }}
             >{l}</a>
           ))}
         </div>
 
-        <p style={{ fontSize: 12, color: "var(--text-sub)" }}>
-          © {new Date().getFullYear()} Narralytics · Built with AI
-        </p>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <p style={{ fontSize: "0.85rem", color: "var(--text-sub)", fontWeight: 500 }}>
+            © {new Date().getFullYear()} Narralytics
+          </p>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-sub)" }}>
+            Powered by AI & Modern Web
+          </p>
+        </div>
       </div>
     </footer>
   );
