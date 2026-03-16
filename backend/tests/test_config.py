@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Configuration Test Script for Narralytics Backend
 Tests all environment variables and external service connections
@@ -9,24 +10,24 @@ import sys
 from pathlib import Path
 
 # Add backend directory to Python path
-backend_dir = Path(__file__).parent
+backend_dir = Path(__file__).parent.parent  # Go up one level from tests/ to backend/
 sys.path.insert(0, str(backend_dir))
 
 try:
     from config import settings
-    print("✅ Configuration module loaded successfully!")
+    print("OK Configuration module loaded successfully!")
 except ImportError as e:
-    print(f"❌ Failed to import config module: {e}")
+    print(f"ERROR Failed to import config module: {e}")
     print("Make sure you're running this from the backend directory")
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Configuration error: {e}")
+    print(f"ERROR Configuration error: {e}")
     print("Check your .env file and environment variables")
     sys.exit(1)
 
 def test_environment_variables():
     """Test all required environment variables"""
-    print("\n🔧 Testing Environment Variables:")
+    print("\nTesting Environment Variables:")
     
     # Required variables
     required_vars = {
@@ -45,18 +46,16 @@ def test_environment_variables():
     
     for var_name, var_value in required_vars.items():
         if not var_value or var_value == "":
-            print(f"❌ {var_name}: Not set or empty")
+            print(f"ERROR {var_name}: Not set or empty")
             all_good = False
         elif var_name == 'JWT_SECRET' and len(var_value) < 32:
-            print(f"⚠️  {var_name}: Too short (should be 32+ characters)")
+            print(f"WARN {var_name}: Too short (should be 32+ characters)")
             all_good = False
-        elif var_name == 'GEMINI_API_KEY' and not any(
-            var_value.startswith(prefix) for prefix in ('AIza', 'TEST-', 'CI-MOCK-')
-        ):
-            print(f"⚠️  {var_name}: Invalid format (expected to start with AIza for production or TEST-/CI-MOCK- prefixes for CI/non-production environments)")
+        elif var_name == 'GEMINI_API_KEY' and not var_value.startswith('AIza'):
+            print(f"WARN {var_name}: Invalid format (should start with 'AIza')")
             all_good = False
         elif var_name == 'MONGODB_URI' and not var_value.startswith('mongodb'):
-            print(f"⚠️  {var_name}: Invalid format (should start with 'mongodb')")
+            print(f"WARN {var_name}: Invalid format (should start with 'mongodb')")
             all_good = False
         else:
             # Mask sensitive values for display
@@ -76,13 +75,13 @@ def test_environment_variables():
             else:
                 display_value = var_value
             
-            print(f"✅ {var_name}: {display_value}")
+            print(f"OK {var_name}: {display_value}")
     
     return all_good
 
 def test_file_structure():
     """Test if required directories and files exist"""
-    print("\n📁 Testing File Structure:")
+    print("\nTesting File Structure:")
     
     required_paths = [
         'auth/__init__.py',
@@ -102,23 +101,23 @@ def test_file_structure():
     for path in required_paths:
         full_path = backend_dir / path
         if full_path.exists():
-            print(f"✅ {path}: Found")
+            print(f"OK {path}: Found")
         else:
-            print(f"❌ {path}: Missing")
+            print(f"ERROR {path}: Missing")
             all_good = False
     
     # Check upload directory
     upload_dir = Path(settings.UPLOAD_DIR)
     if upload_dir.exists():
-        print(f"✅ Upload directory: {upload_dir}")
+        print(f"OK Upload directory: {upload_dir}")
     else:
-        print(f"⚠️  Upload directory: {upload_dir} (will be created automatically)")
+        print(f"WARN Upload directory: {upload_dir} (will be created automatically)")
     
     return all_good
 
 def test_dependencies():
     """Test if all required Python packages are installed"""
-    print("\n📦 Testing Python Dependencies:")
+    print("\nTesting Python Dependencies:")
     
     required_packages = [
         'fastapi',
@@ -126,7 +125,7 @@ def test_dependencies():
         'motor',
         'pymongo', 
         'pandas',
-        'google.generativeai',
+        'google-genai',
         'pydantic',
         'authlib',
         'httpx',
@@ -142,22 +141,22 @@ def test_dependencies():
         try:
             if package == 'google-genai':
                 from google import genai
-                print(f"✅ {package}: Installed")
+                print(f"OK {package}: Installed")
             elif package == 'jose':
                 from jose import jwt
-                print(f"✅ python-{package}: Installed")
+                print(f"OK python-{package}: Installed")
             else:
                 __import__(package)
-                print(f"✅ {package}: Installed")
+                print(f"OK {package}: Installed")
         except ImportError:
-            print(f"❌ {package}: Not installed")
+            print(f"ERROR {package}: Not installed")
             all_good = False
     
     return all_good
 
 def main():
     """Run all configuration tests"""
-    print("🧪 Narralytics Backend Configuration Test")
+    print("Narralytics Backend Configuration Test")
     print("=" * 50)
     
     # Test environment variables
@@ -172,28 +171,28 @@ def main():
     # Final result
     print("\n" + "=" * 50)
     if env_ok and files_ok and deps_ok:
-        print("🎉 All configuration tests passed!")
+        print("SUCCESS All configuration tests passed!")
         print("Your backend is ready to run.")
         print("\nNext steps:")
         print("1. Start the server: uvicorn main:app --reload --host 0.0.0.0 --port 8000")
         print("2. Test health endpoint: http://localhost:8000/health")
         print("3. View API docs: http://localhost:8000/docs")
     else:
-        print("❌ Some configuration tests failed!")
+        print("ERROR Some configuration tests failed!")
         print("\nPlease fix the issues above before starting the server.")
         
         if not env_ok:
-            print("\n🔧 Environment Variable Issues:")
+            print("\nEnvironment Variable Issues:")
             print("- Check your .env file exists and has all required values")
             print("- Generate JWT secret: python -c \"import secrets; print(secrets.token_hex(32))\"")
             
         if not files_ok:
-            print("\n📁 File Structure Issues:")
+            print("\nFile Structure Issues:")
             print("- Make sure you're in the backend directory")
             print("- Verify all modules were created correctly")
             
         if not deps_ok:
-            print("\n📦 Dependency Issues:")
+            print("\nDependency Issues:")
             print("- Install missing packages: pip install -r requirements.txt")
             print("- Make sure virtual environment is activated")
 

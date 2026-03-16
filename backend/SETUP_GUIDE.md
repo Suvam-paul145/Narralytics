@@ -145,7 +145,7 @@ This installs:
 3. Choose "Connect your application"
 4. Driver: Python, Version: 3.12 or later
 5. **Copy the connection string**
-   - It looks like: `mongodb+srv://narralytics_user:<password>@cluster0.xxxxx.mongodb.net/`
+   - It looks like: `mongodb+srv://username:password@cluster.mongodb.net/`
 6. **Replace `<password>` with your actual password** (from step 5.2)
 
 ---
@@ -175,8 +175,8 @@ Open `.env` in a text editor and add:
 
 ```bash
 # Google OAuth
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret
+GOOGLE_CLIENT_ID=<YOUR_CLIENT_ID>
+GOOGLE_CLIENT_SECRET=<YOUR_CLIENT_SECRET>
 REDIRECT_URI=http://localhost:8000/auth/callback
 FRONTEND_URL=http://localhost:5173
 
@@ -186,7 +186,7 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRE_HOURS=24
 
 # MongoDB
-MONGODB_URI=mongodb+srv://narralytics_user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
 MONGODB_DB=narralytics
 
 # Google Gemini

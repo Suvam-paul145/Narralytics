@@ -155,6 +155,69 @@ def check_gemini_migration():
     print("✅ Gemini SDK migration completed successfully")
     return True
 
+def check_oauth_configuration():
+    """Check if OAuth is properly configured"""
+    print("🔐 Checking OAuth configuration...")
+    
+    # Check backend OAuth settings
+    with open(".env", "r", encoding="utf-8") as f:
+        env_content = f.read()
+        
+    required_oauth_vars = [
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET", 
+        "REDIRECT_URI",
+        "FRONTEND_URL"
+    ]
+    
+    missing_vars = []
+    for var in required_oauth_vars:
+        # Look for the variable assignment and check if it has a value
+        if f"{var}=" in env_content:
+            # Extract the value after the = sign
+            lines = env_content.split('\n')
+            for line in lines:
+                if line.strip().startswith(f"{var}=") and not line.strip().startswith('#'):
+                    value = line.split('=', 1)[1].strip()
+                    if not value:
+                        missing_vars.append(var)
+                    break
+        else:
+            missing_vars.append(var)
+    
+    if missing_vars:
+        print(f"❌ Missing OAuth environment variables: {', '.join(missing_vars)}")
+        return False
+    
+    # Check if OAuth endpoints exist in auth router
+    if Path("routers/auth.py").exists():
+        with open("routers/auth.py", "r", encoding="utf-8") as f:
+            auth_content = f.read()
+            if "/google" in auth_content and "/callback" in auth_content:
+                print("✅ OAuth endpoints defined in auth router")
+            else:
+                print("❌ OAuth endpoints missing in auth router")
+                return False
+    else:
+        print("❌ Auth router not found")
+        return False
+    
+    # Check if frontend Login component has OAuth button enabled
+    frontend_login_path = Path("../frontend/src/pages/Login.jsx")
+    if frontend_login_path.exists():
+        with open(frontend_login_path, "r", encoding="utf-8") as f:
+            login_content = f.read()
+            if "handleGoogleLogin" in login_content and "disabled" not in login_content.split("handleGoogleLogin")[0].split("button")[-1]:
+                print("✅ Frontend OAuth button enabled")
+            else:
+                print("❌ Frontend OAuth button not properly enabled")
+                return False
+    else:
+        print("⚠️  Frontend Login component not found (may be in different location)")
+    
+    print("✅ OAuth configuration is complete")
+    return True
+
 def main():
     """Main system check"""
     print("🔍 Narralytics System Check")
@@ -169,7 +232,8 @@ def main():
         check_test_organization,
         check_gitignore,
         check_health_system,
-        check_gemini_migration
+        check_gemini_migration,
+        check_oauth_configuration
     ]
     
     passed = 0

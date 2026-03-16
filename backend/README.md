@@ -360,8 +360,8 @@ See `.env.example` for required configuration:
 
 ```bash
 # Google OAuth
-GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
+GOOGLE_CLIENT_ID=<YOUR_CLIENT_ID>
+GOOGLE_CLIENT_SECRET=<YOUR_CLIENT_SECRET>
 REDIRECT_URI=http://localhost:8000/auth/callback
 FRONTEND_URL=http://localhost:5173
 
@@ -371,7 +371,7 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRE_HOURS=24
 
 # MongoDB
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
 MONGODB_DB=narralytics
 
 # Gemini AI

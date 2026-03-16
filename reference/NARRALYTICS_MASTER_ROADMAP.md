@@ -245,14 +245,14 @@ pip install fastapi uvicorn mangum pandas google-generativeai \
 
 Create backend/.env:
 ```
-GEMINI_API_KEY=AIza...
-GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
+GEMINI_API_KEY=your-gemini-api-key
+GOOGLE_CLIENT_ID=<YOUR_CLIENT_ID>
+GOOGLE_CLIENT_SECRET=<YOUR_CLIENT_SECRET>
 REDIRECT_URI=http://localhost:8000/auth/callback
 FRONTEND_URL=http://localhost:5173
 JWT_SECRET=run: python -c "import secrets; print(secrets.token_hex(32))"
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 AWS_REGION=us-east-1
 DYNAMODB_TABLE=narralytics_history
 ```

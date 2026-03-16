@@ -215,14 +215,14 @@ aws lambda create-function \
   --timeout 30 \
   --memory-size 512 \
   --environment Variables='{
-    "GOOGLE_CLIENT_ID":"your-client-id.apps.googleusercontent.com",
-    "GOOGLE_CLIENT_SECRET":"GOCSPX-your-secret",
+    "GOOGLE_CLIENT_ID":"<YOUR_CLIENT_ID>",
+    "GOOGLE_CLIENT_SECRET":"your-google-client-secret",
     "REDIRECT_URI":"https://your-api-gateway-url/auth/callback",
     "FRONTEND_URL":"https://your-frontend-url.vercel.app",
     "JWT_SECRET":"your-jwt-secret",
-    "MONGODB_URI":"mongodb+srv://user:pass@cluster.mongodb.net/",
+    "MONGODB_URI":"mongodb+srv://username:password@cluster.mongodb.net/",
     "MONGODB_DB":"narralytics",
-    "GEMINI_API_KEY":"AIza-your-key",
+    "GEMINI_API_KEY":"your-gemini-api-key",
     "AWS_REGION":"us-east-1",
     "AWS_BUCKET":"narralytics-uploads-your-suffix"
   }'
@@ -324,14 +324,14 @@ echo "https://$API_ID.execute-api.us-east-1.amazonaws.com/prod"
 aws lambda update-function-configuration \
   --function-name narralytics-backend \
   --environment Variables='{
-    "GOOGLE_CLIENT_ID":"your-client-id.apps.googleusercontent.com",
-    "GOOGLE_CLIENT_SECRET":"GOCSPX-your-secret",
+    "GOOGLE_CLIENT_ID":"<YOUR_CLIENT_ID>",
+    "GOOGLE_CLIENT_SECRET":"your-google-client-secret",
     "REDIRECT_URI":"https://your-api-id.execute-api.us-east-1.amazonaws.com/prod/auth/callback",
     "FRONTEND_URL":"https://your-frontend.vercel.app",
     "JWT_SECRET":"your-jwt-secret",
-    "MONGODB_URI":"mongodb+srv://user:pass@cluster.mongodb.net/",
+    "MONGODB_URI":"mongodb+srv://username:password@cluster.mongodb.net/",
     "MONGODB_DB":"narralytics",
-    "GEMINI_API_KEY":"AIza-your-key",
+    "GEMINI_API_KEY":"your-gemini-api-key",
     "AWS_REGION":"us-east-1",
     "AWS_BUCKET":"narralytics-uploads-your-suffix"
   }'

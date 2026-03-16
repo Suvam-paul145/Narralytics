@@ -1902,8 +1902,8 @@ python-multipart
 
 ```
 # Google OAuth
-GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
+GOOGLE_CLIENT_ID=<YOUR_CLIENT_ID>
+GOOGLE_CLIENT_SECRET=<YOUR_CLIENT_SECRET>
 REDIRECT_URI=http://localhost:8000/auth/callback
 FRONTEND_URL=http://localhost:5173
 
@@ -1915,7 +1915,7 @@ MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
 MONGODB_DB=narralytics
 
 # Gemini (from aistudio.google.com)
-GEMINI_API_KEY=AIza...
+GEMINI_API_KEY=your-gemini-api-key
 
 # Storage
 UPLOAD_DIR=./uploads

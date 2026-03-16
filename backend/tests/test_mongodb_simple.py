@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Simple MongoDB connection test
 """
@@ -15,7 +16,7 @@ async def test_mongodb():
         from config import settings
         from motor.motor_asyncio import AsyncIOMotorClient
         
-        print("🧪 Testing MongoDB connection...")
+        print(" Testing MongoDB connection...")
         print(f"URI: {settings.MONGODB_URI[:50]}...")
         
         # Test connection
@@ -26,28 +27,28 @@ async def test_mongodb():
         
         # Simple ping test
         await client.admin.command('ping')
-        print("✅ MongoDB ping successful!")
+        print("OK MongoDB ping successful!")
         
         # Test database operations
         test_collection = db.test_connection
         
         # Insert test document
         result = await test_collection.insert_one({"test": "connection", "status": "working"})
-        print(f"✅ Insert successful: {result.inserted_id}")
+        print(f"OK Insert successful: {result.inserted_id}")
         
         # Read test document
         doc = await test_collection.find_one({"_id": result.inserted_id})
-        print(f"✅ Read successful: {doc}")
+        print(f"OK Read successful: {doc}")
         
         # Clean up
         await test_collection.delete_one({"_id": result.inserted_id})
-        print("✅ Cleanup successful")
+        print("OK Cleanup successful")
         
         client.close()
-        print("🎉 MongoDB connection test passed!")
+        print("SUCCESS MongoDB connection test passed!")
         
     except Exception as e:
-        print(f"❌ MongoDB test failed: {e}")
+        print(f"ERROR MongoDB test failed: {e}")
         print("\nTroubleshooting:")
         print("1. Check MongoDB Atlas cluster is running")
         print("2. Verify username/password in connection string")

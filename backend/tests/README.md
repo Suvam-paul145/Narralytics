@@ -72,7 +72,7 @@ Make sure to set up your test environment variables in `.env` before running tes
 
 ```env
 MONGODB_URL=mongodb://localhost:27017
-GEMINI_API_KEY=your_api_key_here
+GEMINI_API_KEY=your-gemini-api-key
 FRONTEND_URL=http://localhost:3000
 ```
 
