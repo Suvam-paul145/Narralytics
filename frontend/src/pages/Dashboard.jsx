@@ -327,12 +327,8 @@ function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
   const navigate = useNavigate();
   const navItems = [
     {id:"overview",   icon:LayoutDashboard,label:"Overview"},
-    {id:"analytics",  icon:BarChart2,      label:"Analytics"},
-    {id:"datasets",   icon:Database,       label:"Datasets"},
     {id:"chat",       icon:MessageSquare,  label:"AI Chat",  badge:2},
-    {id:"insights",   icon:Lightbulb,      label:"Insights"},
     {id:"reports",    icon:FileText,       label:"Reports"},
-    {id:"alerts",     icon:Bell,           label:"Alerts",   badge:3},
   ];
 
   const handleNavClick = (id) => {
