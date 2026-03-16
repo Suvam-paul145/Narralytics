@@ -10,8 +10,17 @@ async def connect_mongodb() -> None:
     global client, db
     if client is not None:
         return
-    client = AsyncIOMotorClient(settings.MONGODB_URI)
-    db = client[settings.MONGODB_DB]
+    try:
+        client = AsyncIOMotorClient(settings.MONGODB_URI)
+        db = client[settings.MONGODB_DB]
+        # Test connection
+        await client.admin.command('ping')
+        print(f"✅ Connected to MongoDB: {settings.MONGODB_DB}")
+    except Exception as e:
+        print(f"⚠️  MongoDB connection failed: {e}")
+        print("⚠️  Running in offline mode - some features may not work")
+        client = None
+        db = None
 
 
 async def close_mongodb() -> None:
@@ -24,5 +33,5 @@ async def close_mongodb() -> None:
 
 def get_db():
     if db is None:
-        raise RuntimeError("MongoDB connection has not been initialized")
+        raise RuntimeError("MongoDB connection has not been initialized. Running in offline mode.")
     return db

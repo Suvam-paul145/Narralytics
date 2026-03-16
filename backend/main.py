@@ -1,10 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mangum import Mangum
 
 from config import settings
 from database.mongodb import close_mongodb, connect_mongodb
 from routers import auth, chat, dashboard, datasets, query, report
+
+# Optional import for AWS Lambda deployment
+try:
+    from mangum import Mangum
+    handler = None  # Will be set at the end
+except ImportError:
+    print("⚠️  Mangum not available - AWS Lambda deployment not supported")
+    Mangum = None
 
 app = FastAPI(title="Narralytics API", version="2.0.0")
 
@@ -39,4 +46,8 @@ app.include_router(query.router)
 app.include_router(chat.router)
 app.include_router(report.router)
 
-handler = Mangum(app)
+# AWS Lambda handler (optional)
+if Mangum is not None:
+    handler = Mangum(app)
+else:
+    handler = None

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -15,12 +15,19 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// Wrapper for Landing to include navigation
+function LandingPage() {
+  const navigate = useNavigate();
+  return <Landing onGetStarted={() => navigate("/login")} />;
+}
+
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
@@ -34,3 +41,4 @@ function App() {
 }
 
 export default App;
+
