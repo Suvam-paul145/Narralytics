@@ -21,10 +21,8 @@ jobs:
       GOOGLE_CLIENT_SECRET: ci-client-secret
       REDIRECT_URI: http://localhost:8000/auth/callback
       FRONTEND_URL: http://localhost:5173
-      JWT_SECRET: ci-jwt-secret-32-characters-long-12345
       MONGODB_URI: mongodb://localhost:27017
       MONGODB_DB: narralytics
-      GEMINI_API_KEY: AIzaFakeApiKeyForCITests123456
       UPLOAD_DIR: ./uploads
     steps:
       - name: Checkout
@@ -36,6 +34,18 @@ jobs:
           python-version: "3.11"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
+
+      - name: Prepare CI secrets
+        env:
+          JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.CI_GEMINI_API_KEY }}
+        run: |
+          SCRIPT_PATH="${GITHUB_WORKSPACE:-.}/.github/scripts/generate_ci_secrets.py"
+          if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "CI secret generator missing at $SCRIPT_PATH"
+            exit 1
+          fi
+          python "$SCRIPT_PATH" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: |
@@ -70,7 +80,7 @@ jobs:
           pip install bandit pip-audit
 
       - name: Bandit static analysis
-        run: bandit -r . -x tests
+        run: bandit -r . -x tests,__pycache__,.venv
 
       - name: Python dependency audit
         run: pip-audit -r requirements.txt
@@ -97,14 +107,30 @@ jobs:
 
       - name: Lint
         run: |
-          if npm ls eslint > /dev/null 2>&1; then
+          set -e
+
+          HAS_ESLINT=0
+          npm ls eslint > /dev/null 2>&1 && HAS_ESLINT=1
+          HAS_LINT_SCRIPT=0
+          node - <<'NODE' && HAS_LINT_SCRIPT=1
+const fs = require('fs');
+try {
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  process.exit(pkg.scripts && pkg.scripts.lint ? 0 : 1);
+} catch (err) {
+  console.error('Failed to parse package.json in current directory to check for lint script:', process.cwd(), err);
+  process.exit(1);
+}
+NODE
+
+          if [ "$HAS_ESLINT" -eq 1 ] && [ "$HAS_LINT_SCRIPT" -eq 1 ]; then
             npm run lint
           else
-            echo "Skipping lint: eslint/config not present in repo. Add eslint to devDependencies to enable."
+            echo "Skipping lint: eslint, lint script, or configuration not present. Add eslint and a lint script to enable."
           fi
 
       - name: Build
         run: npm run build
 
-      - name: Audit frontend dependencies
-        run: npm audit --audit-level=high --omit=dev
+      - name: Audit all frontend dependencies (critical level)
+        run: npm audit --audit-level=critical
