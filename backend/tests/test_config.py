@@ -50,8 +50,10 @@ def test_environment_variables():
         elif var_name == 'JWT_SECRET' and len(var_value) < 32:
             print(f"⚠️  {var_name}: Too short (should be 32+ characters)")
             all_good = False
-        elif var_name == 'GEMINI_API_KEY' and not var_value.startswith('AIza'):
-            print(f"⚠️  {var_name}: Invalid format (should start with 'AIza')")
+        elif var_name == 'GEMINI_API_KEY' and not any(
+            var_value.startswith(prefix) for prefix in ('AIza', 'TEST-', 'CI-MOCK-')
+        ):
+            print(f"⚠️  {var_name}: Invalid format (expected to start with AIza for production or TEST-/CI-MOCK- prefixes for CI/non-production environments)")
             all_good = False
         elif var_name == 'MONGODB_URI' and not var_value.startswith('mongodb'):
             print(f"⚠️  {var_name}: Invalid format (should start with 'mongodb')")
