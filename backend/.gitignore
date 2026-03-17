@@ -68,3 +68,12 @@ uploads/*
 !uploads/.gitkeep
 temp/
 tmp/
+
+# AWS Lambda deployment artifacts
+lambda_package/
+narralytics_lambda.zip
+lambda-trust-policy.json
+narralytics-lambda-permissions.json
+
+# AWS deployment documentation (optional - keep if you want to track deployment steps)
+# docs/AWS_DEPLOYMENT_*.md

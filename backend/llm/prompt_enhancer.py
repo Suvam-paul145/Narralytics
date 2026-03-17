@@ -16,7 +16,8 @@ from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> genai.Client:
+def _get_client():
+    """Get the Google GenAI client instance."""
     if not settings.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured")
     return genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -45,6 +46,7 @@ instruction using ONLY column names that exist in the schema below.
 
 
 def build_schema_text(schema: dict) -> str:
+    """Build a human-readable schema description for the LLM."""
     lines = [f"Table: data  |  Rows: {schema['row_count']}"]
     for col in schema["columns"]:
         meta = f"{col['name']} ({col['dtype']})"
@@ -67,6 +69,15 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
         Enhanced prompt string, or the original prompt prefixed with
         '[CANNOT_ANSWER]' if the question cannot be served from the schema.
     """
+    # Check quota before making request
+    if not quota_manager.is_quota_available():
+        print("⚠️  Gemini API quota exhausted, using fallback prompt enhancement")
+        return quota_manager.get_fallback_response(
+            "prompt_enhancement", 
+            raw_prompt=raw, 
+            schema=schema
+        )
+    
     schema_text = build_schema_text(schema)
 
     history_text = ""
@@ -87,7 +98,7 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model="models/gemini-2.5-flash",
+            model="gemini-2.5-flash",
             contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
         enhanced = response.text.strip()
@@ -100,8 +111,8 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
     except Exception as exc:
         print(f"[prompt_enhancer] fallback to raw prompt due to: {exc}")
         
-        # Use intelligent fallback if quota exhausted
-        if "QUOTA_EXHAUSTED" in str(exc):
+        # Use intelligent fallback if quota exhausted or other errors
+        if "QUOTA_EXHAUSTED" in str(exc) or "429" in str(exc) or "quota" in str(exc).lower():
             return quota_manager.get_fallback_response(
                 "prompt_enhancement", 
                 raw_prompt=raw, 
