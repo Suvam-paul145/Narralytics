@@ -38,7 +38,7 @@ def test_environment_variables():
         'JWT_SECRET': settings.JWT_SECRET,
         'MONGODB_URI': settings.MONGODB_URI,
         'MONGODB_DB': settings.MONGODB_DB,
-        'GEMINI_API_KEY': settings.GEMINI_API_KEY,
+        'GROQ_API_KEY': settings.GROQ_API_KEY,
         'UPLOAD_DIR': settings.UPLOAD_DIR,
     }
     
@@ -54,15 +54,15 @@ def test_environment_variables():
         elif var_name == 'JWT_SECRET' and len(var_value) < 32:
             print(f"WARN {var_name}: Too short (should be 32+ characters)")
             all_good = False
-        elif var_name == 'GEMINI_API_KEY' and not var_value.startswith('AIza'):
-            print(f"WARN {var_name}: Invalid format (should start with 'AIza')")
+        elif var_name == 'GROQ_API_KEY' and not var_value.startswith('gsk_'):
+            print(f"WARN {var_name}: Invalid format (should start with 'gsk_')")
             all_good = False
         elif var_name == 'MONGODB_URI' and not var_value.startswith('mongodb'):
             print(f"WARN {var_name}: Invalid format (should start with 'mongodb')")
             all_good = False
         else:
             # Mask sensitive values for display
-            if var_name in ['JWT_SECRET', 'GOOGLE_CLIENT_SECRET', 'GEMINI_API_KEY']:
+            if var_name in ['JWT_SECRET', 'GOOGLE_CLIENT_SECRET', 'GROQ_API_KEY']:
                 display_value = f"{var_value[:10]}..." if len(var_value) > 10 else "***"
             elif var_name == 'MONGODB_URI':
                 # Hide password in MongoDB URI
@@ -128,7 +128,7 @@ def test_dependencies():
         'motor',
         'pymongo', 
         'pandas',
-        'google-genai',
+        'groq',
         'pydantic',
         'authlib',
         'httpx',
@@ -142,8 +142,8 @@ def test_dependencies():
     
     for package in required_packages:
         try:
-            if package == 'google-genai':
-                from google import genai
+            if package == 'groq':
+                import groq
                 print(f"OK {package}: Installed")
             elif package == 'jose':
                 from jose import jwt

@@ -126,33 +126,33 @@ def check_health_system():
     
     return True
 
-def check_gemini_migration():
-    """Check if Gemini SDK migration is complete"""
-    print("🔄 Checking Gemini SDK migration...")
+def check_groq_migration():
+    """Check if migration from Gemini to Groq is complete"""
+    print("🔄 Checking Groq migration...")
     
     # Check requirements.txt
     with open("requirements.txt", "r", encoding="utf-8") as f:
         requirements = f.read()
-        if "google-genai" in requirements and "google-generativeai" not in requirements:
-            print("✅ Requirements.txt updated to use google-genai")
+        if "groq" in requirements:
+            print("✅ Requirements.txt contains groq package")
         else:
-            print("❌ Requirements.txt still contains old google-generativeai package")
+            print("❌ Requirements.txt missing groq package")
             return False
     
-    # Check LLM files for new import pattern
+    # Check LLM files for Groq import pattern
     llm_files = ["llm/chat_engine.py", "llm/chart_engine.py", "llm/report_engine.py", "llm/auto_dashboard.py"]
     
     for file_path in llm_files:
         if Path(file_path).exists():
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                if "from google import genai" in content and "import google.generativeai" not in content:
-                    print(f"✅ {file_path} migrated to new SDK")
+                if "from groq import Groq" in content:
+                    print(f"✅ {file_path} migrated to Groq")
                 else:
-                    print(f"❌ {file_path} still uses old SDK")
+                    print(f"❌ {file_path} not yet migrated to Groq")
                     return False
     
-    print("✅ Gemini SDK migration completed successfully")
+    print("✅ Groq migration completed successfully")
     return True
 
 def check_oauth_configuration():
@@ -232,7 +232,7 @@ def main():
         check_test_organization,
         check_gitignore,
         check_health_system,
-        check_gemini_migration,
+        check_groq_migration,
         check_oauth_configuration
     ]
     

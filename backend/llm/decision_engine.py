@@ -4,17 +4,17 @@ import json
 from functools import lru_cache
 from typing import Any
 
-from google import genai
+from groq import Groq
 
 from config import settings
-from llm.genai_client import generate_with_retry
+from llm.genai_client import generate_with_retry, _GROQ_MODEL
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> genai.Client:
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+def _get_client() -> Groq:
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+    return Groq(api_key=settings.GROQ_API_KEY)
 
 
 def _extract_json(raw: str) -> dict[str, Any]:
@@ -130,7 +130,7 @@ Return:
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model="models/gemini-2.5-flash",
+            model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
         )
         decision = _extract_json(response.text)

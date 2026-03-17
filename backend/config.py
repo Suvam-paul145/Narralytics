@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://localhost:27017"
     MONGODB_DB: str = "narralytics"
 
-    GEMINI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""  # Legacy – no longer used; kept for backwards compatibility
+    GROQ_API_KEY: str = ""
 
     UPLOAD_DIR: str = "./uploads"
     AWS_REGION: str = "us-east-1"

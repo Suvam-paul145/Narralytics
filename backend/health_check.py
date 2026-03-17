@@ -57,7 +57,7 @@ class HealthChecker:
     
     # Optional dependencies
     OPTIONAL_DEPENDENCIES = [
-        ("google.genai", None, "Google GenAI"),
+        ("groq", "__version__", "Groq"),
     ]
     
     def __init__(self):
@@ -119,7 +119,7 @@ class HealthChecker:
             
             # Define critical configuration checks
             config_checks = [
-                (settings.GEMINI_API_KEY, "Gemini API key", True),
+                (settings.GROQ_API_KEY, "Groq API key", True),
                 (settings.MONGODB_URI, "MongoDB URI", True),
                 (getattr(settings, 'JWT_SECRET', None), "JWT secret", True),
                 (getattr(settings, 'GOOGLE_CLIENT_ID', None), "Google Client ID", False),

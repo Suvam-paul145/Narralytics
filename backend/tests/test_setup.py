@@ -78,27 +78,28 @@ def test_mongodb_connection():
         print("Check your MONGODB_URI in .env file")
         return False
 
-def test_gemini_api():
-    """Test Gemini API connection"""
+def test_groq_api():
+    """Test Groq API connection"""
     try:
         from config import settings
-        from google import genai
+        from groq import Groq
         
-        if not settings.GEMINI_API_KEY:
-            print("ERROR GEMINI_API_KEY not configured")
+        if not settings.GROQ_API_KEY:
+            print("ERROR GROQ_API_KEY not configured")
             return False
         
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        
-        # Simple test prompt
-        response = model.generate_content("Say 'Hello from Gemini!'")
-        print(f"OK Gemini API connected successfully")
-        print(f"   - Response: {response.text.strip()}")
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": "Say 'Hello from Groq!'"}],
+        )
+        text = response.choices[0].message.content or ""
+        print(f"OK Groq API connected successfully")
+        print(f"   - Response: {text.strip()}")
         return True
     except Exception as e:
-        print(f"ERROR Gemini API failed: {e}")
-        print("Check your GEMINI_API_KEY in .env file")
+        print(f"ERROR Groq API failed: {e}")
+        print("Check your GROQ_API_KEY in .env file")
         return False
 
 def test_file_operations():
@@ -164,7 +165,7 @@ def main():
         ("Basic Package Imports", test_basic_imports),
         ("Configuration Loading", test_config_loading),
         ("MongoDB Connection", test_mongodb_connection),
-        ("Gemini API Connection", test_gemini_api),
+        ("Groq API Connection", test_groq_api),
         ("File Operations", test_file_operations),
         ("FastAPI App Creation", test_fastapi_app),
     ]

@@ -23,18 +23,18 @@ def test_quota_manager():
         print(f"  ❌ Quota Manager Error: {e}")
         return False
 
-def test_gemini_connection():
-    """Test Gemini API connection"""
+def test_groq_connection():
+    """Test Groq API connection"""
     try:
-        from llm.gemini_client import test_gemini_connection
+        from llm.gemini_client import test_groq_connection
         
-        result = test_gemini_connection()
-        print(f"🤖 Gemini API Test:")
+        result = test_groq_connection()
+        print(f"🤖 Groq API Test:")
         print(f"  ✅ Response: {result}")
         
         return "Hello" in result or "Error" in result
     except Exception as e:
-        print(f"  ❌ Gemini Connection Error: {e}")
+        print(f"  ❌ Groq Connection Error: {e}")
         return False
 
 def test_fallback_systems():
@@ -94,7 +94,7 @@ def main():
     
     tests = [
         ("Quota Manager", test_quota_manager),
-        ("Gemini Connection", test_gemini_connection),
+        ("Groq Connection", test_groq_connection),
         ("Fallback Systems", test_fallback_systems),
         ("Health Endpoint", test_health_endpoint),
     ]
