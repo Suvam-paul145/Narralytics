@@ -4,6 +4,7 @@ from typing import Any, TypedDict
 from fastapi import APIRouter, Depends, HTTPException
 
 from analytics.aggregation_engine import normalize_chart_result
+from analytics.chart_builder import convert_llm_json_to_chart_spec
 from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
 from database.history import save_interaction
@@ -50,15 +51,23 @@ def _execute_options_with_retry(
     """
     retries = 0
     current_options = raw_options
+    results: list[ChartResult] = []
 
     while retries <= max_retries:
-        results: list[ChartResult] = []
+        results = []
         error_msgs: list[str] = []
+        
+        # Convert LLM MANDATORY JSON into standard ChartSpec formatted dicts
+        chart_spec_dicts = convert_llm_json_to_chart_spec(current_options, schema)
 
-        for raw_option in current_options:
-            spec = ChartSpec(**raw_option)
+        for spec_dict in chart_spec_dicts:
+            spec = ChartSpec(**spec_dict)
             try:
+                import logging
+                logging.info(f"[query_router] Executing SQL: {spec.sql}")
                 raw_data = execute_query(db_path, spec.sql)
+                logging.info(f"[query_router] Processed dataset shape: {len(raw_data)} rows")
+
                 normalized_spec_payload, data = normalize_chart_result(
                     spec=spec.model_dump(),
                     rows=raw_data,
@@ -89,11 +98,11 @@ def _execute_options_with_retry(
         all_columns = [str(col["name"]) for col in schema["columns"]]
         error_text = "\n".join(error_msgs)
         retry_prompt = (
-            f"The query '{prompt}' produced SQL errors:\n{error_text}\n\n"
+            f"The query '{prompt}' produced errors with your mapped logic:\n{error_text}\n\n"
             f"Valid columns are: {', '.join(all_columns)}\n"
-            f"Fix the SQL. Return only corrected JSON."
+            f"Fix the JSON structure. ONLY return the MANDATORY JSON array."
         )
-        retry_history: list[QueryHistoryTurn] = [
+        retry_history: list[dict[str, str]] = [
             *history,
             {"role": "user", "content": prompt},
             {"role": "model", "content": "Encountered SQL errors. Retrying."},
@@ -117,18 +126,20 @@ def _execute_options_with_retry(
 
 @router.post("/query", response_model=QueryResponse)
 async def chart_query(request: QueryRequest, user: dict = Depends(get_current_user)):
+    import logging
+    logging.info(f"[chart_query] Raw User Prompt: {request.prompt}")
     dataset = await get_dataset(request.dataset_id, user["sub"])
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    schema: DatasetSchema = {
+    schema: dict[str, Any] = {
         "row_count": dataset["row_count"],
         "columns": dataset["columns"],
         "date_columns": dataset["date_columns"],
         "numeric_columns": dataset["numeric_columns"],
         "categorical_columns": dataset["categorical_columns"],
     }
-    history: list[QueryHistoryTurn] = [
+    history: list[dict[str, str]] = [
         {"role": turn.role, "content": turn.content} for turn in request.history
     ]
     started_at = time.perf_counter()
