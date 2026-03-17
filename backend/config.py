@@ -1,4 +1,11 @@
+from pathlib import Path
+from typing import Any
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+BACKEND_DIR = Path(__file__).resolve().parent
 
 
 class Settings(BaseSettings):
@@ -6,6 +13,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     REDIRECT_URI: str = "http://localhost:8000/auth/callback"
     FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
     JWT_SECRET: str = "change-me"
     JWT_ALGORITHM: str = "HS256"
@@ -21,7 +29,26 @@ class Settings(BaseSettings):
     AWS_BUCKET: str = ""
     DYNAMODB_TABLE: str = "narralytics_history"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = True
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def normalize_debug(cls, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "development", "dev"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "production", "prod"}:
+                return False
+
+        raise ValueError("DEBUG must be a boolean-like value")
+
+    model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
 
 settings = Settings()
+

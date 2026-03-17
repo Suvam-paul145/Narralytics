@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict
 
 from config import settings
@@ -22,9 +22,8 @@ import os
 
 # Build allowed origins from both FRONTEND_URL and FRONTEND_ORIGINS
 _origins = [settings.FRONTEND_URL]
-_extra = os.getenv("FRONTEND_ORIGINS", "")
-if _extra:
-    _origins.extend([o.strip() for o in _extra.split(",") if o.strip()])
+if settings.FRONTEND_ORIGINS:
+    _origins.extend([o.strip() for o in settings.FRONTEND_ORIGINS.split(",") if o.strip()])
 _origins = list(set(_origins))  # deduplicate
 
 app.add_middleware(
@@ -64,7 +63,7 @@ async def api_health() -> dict:
     
     health_status: Dict[str, Any] = {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "services": {
             "api": "healthy",
             "database": "unknown",

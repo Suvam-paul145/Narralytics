@@ -3,16 +3,16 @@
 .env.*
 *.env
 
-# Python cache & artifacts
+# Python cache and test artifacts
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-*.py[cod]
 *$py.class
 *.so
+.pytest_cache/
 
-# Distribution / packaging
+# Distribution and packaging
 .Python
 build/
 develop-eggs/
@@ -31,7 +31,7 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environment
+# Virtual environments
 /venv/
 venv/
 ENV/
@@ -71,9 +71,8 @@ tmp/
 
 # AWS Lambda deployment artifacts
 lambda_package/
+lambda_package_minimal/
 narralytics_lambda.zip
+narralytics_lambda_minimal.zip
 lambda-trust-policy.json
 narralytics-lambda-permissions.json
-
-# AWS deployment documentation (optional - keep if you want to track deployment steps)
-# docs/AWS_DEPLOYMENT_*.md

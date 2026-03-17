@@ -22,11 +22,12 @@ class QuotaManagerError(Exception):
 class QuotaManager:
     """Manages API quotas and provides intelligent fallbacks"""
     
+    BASE_DIR = Path(__file__).resolve().parents[1]
     # Constants for better maintainability
     DEFAULT_DAILY_LIMIT = 20
     SAFETY_BUFFER = 2
     DEFAULT_RETRY_DELAY = 3600  # 1 hour
-    QUOTA_FILE_NAME = "llm_quota_status.json"
+    QUOTA_FILE_NAME = BASE_DIR / "llm_quota_status.json"
     
     def __init__(self, quota_file: Optional[str] = None, daily_limit: int = DEFAULT_DAILY_LIMIT):
         """

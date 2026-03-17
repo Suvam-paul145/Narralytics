@@ -12,7 +12,7 @@ from database.datasets import delete_dataset_meta, get_dataset, get_user_dataset
 from database.users import add_dataset_to_user, remove_dataset_from_user
 from sqlite.loader import load_csv_to_sqlite
 from sqlite.schema_detector import detect_schema
-from storage.local import save_upload
+from storage import save_upload
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 

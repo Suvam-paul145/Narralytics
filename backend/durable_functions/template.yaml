@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Durable Functions Example - Data Processing Workflow'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+
+Globals:
+  Function:
+    Timeout: 900  # 15 minutes max for individual invocations
+    MemorySize: 512
+    Runtime: python3.13
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # IAM Role for Lambda with durable execution permissions
+  DataProcessingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+      Policies:
+        - PolicyName: DataProcessingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: 
+                  - !Sub 'arn:aws:s3:::narralytics-data-${Environment}/*'
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+
+  # The durable function
+  DataProcessingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'narralytics-data-processing-${Environment}'
+      CodeUri: .
+      Handler: data_processing_workflow.data_processing_handler
+      Role: !GetAtt DataProcessingRole.Arn
+      Description: 'Durable function for long-running data processing workflows'
+      
+      # Enable durable execution
+      DurableExecution:
+        Enabled: true
+        
+      # Environment variables
+      Environment:
+        Variables:
+          DATA_BUCKET: !Sub 'narralytics-data-${Environment}'
+          NOTIFICATION_EMAIL: 'notifications@narralytics.com'
+      
+      # Events that can trigger this function
+      Events:
+        # API Gateway trigger
+        ProcessDataApi:
+          Type: Api
+          Properties:
+            Path: /process-data
+            Method: post
+            
+        # S3 trigger for new data files
+        S3Trigger:
+          Type: S3
+          Properties:
+            Bucket: !Ref DataBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: 'incoming/'
+                  - Name: suffix
+                    Value: '.csv'
+
+  # S3 bucket for data storage
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'narralytics-data-${Environment}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt DataProcessingFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: 'incoming/'
+
+  # Permission for S3 to invoke Lambda
+  S3InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DataProcessingFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub '${DataBucket}/*'
+
+  # CloudWatch Log Group
+  DataProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/narralytics-data-processing-${Environment}'
+      RetentionInDays: 30
+
+Outputs:
+  DataProcessingFunctionArn:
+    Description: 'ARN of the data processing durable function'
+    Value: !GetAtt DataProcessingFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataProcessingFunctionArn'
+      
+  DataProcessingFunctionName:
+    Description: 'Name of the data processing durable function'
+    Value: !Ref DataProcessingFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-DataProcessingFunctionName'
+      
+  DataBucketName:
+    Description: 'Name of the S3 data bucket'
+    Value: !Ref DataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-DataBucketName'
+      
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/process-data'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'

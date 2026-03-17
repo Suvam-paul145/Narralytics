@@ -1,19 +1,21 @@
-postman
+postman/
 # Environment variables
 .env
 .env.*
 *.env
 
-# Python cache & artifacts
+# Python cache and test artifacts
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-*.py[cod]
 *$py.class
 *.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Distribution / packaging
+# Distribution and packaging
 .Python
 build/
 develop-eggs/
@@ -32,12 +34,19 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environment
+# Virtual environments
+/.venv/
 /venv/
 venv/
 ENV/
 env/
 .venv/
+backend/.venv/
+backend/venv/
+
+# Node artifacts
+node_modules/
+frontend/dist/
 
 # IDE
 .vscode/
@@ -67,14 +76,16 @@ logs/
 # Uploads and temporary files
 uploads/*
 !uploads/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
 temp/
 tmp/
 
-# AWS Lambda deployment artifacts
+# AWS Lambda build artifacts
 backend/lambda_package/
-backend/narralytics_lambda.zip
-backend/lambda-trust-policy.json
-backend/narralytics-lambda-permissions.json
+backend/lambda_package_minimal/
+backend/*.zip
+lambda-response.json
+lambda-env-vars.json
 
-# AWS deployment documentation (optional - keep if you want to track deployment steps)
-# backend/docs/AWS_DEPLOYMENT_*.md
+demo.py
