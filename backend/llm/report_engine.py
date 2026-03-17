@@ -34,6 +34,13 @@ Write a 3-5 sentence executive summary paragraph that:
 
 Return only the paragraph text.
 """
+    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+        return quota_manager.get_fallback_response(
+            "report_summary",
+            dataset_name=dataset_name,
+            charts=charts
+        )
+
     try:
         client = _get_client()
         response = generate_with_retry(
@@ -41,10 +48,11 @@ Return only the paragraph text.
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
+        quota_manager.record_request(settings.GROQ_API_KEY)
         return response.text.strip()
     except Exception as exc:
         # Use intelligent fallback if quota exhausted
-        if "QUOTA_EXHAUSTED" in str(exc):
+        if quota_manager.is_quota_error(exc):
             return quota_manager.get_fallback_response(
                 "report_summary",
                 dataset_name=dataset_name,
