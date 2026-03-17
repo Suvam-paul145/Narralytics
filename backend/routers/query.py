@@ -3,6 +3,7 @@ from typing import Any, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from analytics.aggregation_engine import normalize_chart_result
 from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
 from database.history import save_interaction
@@ -57,7 +58,13 @@ def _execute_options_with_retry(
         for raw_option in current_options:
             spec = ChartSpec(**raw_option)
             try:
-                data = execute_query(db_path, spec.sql)
+                raw_data = execute_query(db_path, spec.sql)
+                normalized_spec_payload, data = normalize_chart_result(
+                    spec=spec.model_dump(),
+                    rows=raw_data,
+                    schema=schema,
+                )
+                spec = ChartSpec(**normalized_spec_payload)
 
                 # Stage 5: data-driven insight after data fetch, with no hallucination.
                 if data:

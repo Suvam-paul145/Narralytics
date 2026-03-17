@@ -16,9 +16,54 @@ function buildEChartsOption(spec, data) {
   if (!data || data.length === 0) return null;
 
   const { chart_type, x_key, y_key, color_by, title } = spec;
-
-  const xData = data.map((row) => String(row[x_key] ?? ""));
+  const xData = [...new Set(data.map((row) => String(row[x_key] ?? "")))];
   const yData = data.map((row) => Number(row[y_key] ?? 0));
+  const hasColorBy = Boolean(color_by && data.some((row) => row[color_by] !== undefined && row[color_by] !== null));
+
+  const COLORS = ["#6366f1", "#a78bfa", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#22d3ee", "#f97316"];
+
+  const buildSeriesByColor = (seriesType, stacked = false) => {
+    const colorValues = [...new Set(data.map((row) => String(row[color_by] ?? "Unknown")))];
+    return colorValues.map((colorValue, idx) => {
+      const valueMap = new Map();
+      xData.forEach((x) => valueMap.set(x, 0));
+
+      data.forEach((row) => {
+        const xVal = String(row[x_key] ?? "");
+        const cVal = String(row[color_by] ?? "Unknown");
+        if (cVal === colorValue) {
+          valueMap.set(xVal, Number(valueMap.get(xVal) || 0) + Number(row[y_key] ?? 0));
+        }
+      });
+
+      const baseSeries = {
+        type: seriesType,
+        name: colorValue,
+        data: xData.map((x) => Number(valueMap.get(x) || 0)),
+        itemStyle: { color: COLORS[idx % COLORS.length] },
+      };
+
+      if (seriesType === "line") {
+        return {
+          ...baseSeries,
+          smooth: true,
+          lineStyle: { color: COLORS[idx % COLORS.length], width: 2 },
+          areaStyle: chart_type === "area" ? { opacity: 0.2 } : undefined,
+          stack: stacked ? "total" : undefined,
+        };
+      }
+
+      return {
+        ...baseSeries,
+        stack: stacked ? "total" : undefined,
+        emphasis: { itemStyle: { color: COLORS[idx % COLORS.length] } },
+        itemStyle: {
+          color: COLORS[idx % COLORS.length],
+          borderRadius: [4, 4, 0, 0],
+        },
+      };
+    });
+  };
 
   const BASE = {
     backgroundColor: "transparent",
@@ -51,24 +96,29 @@ function buildEChartsOption(spec, data) {
   if (chart_type === "bar") {
     return {
       ...BASE,
+      legend: hasColorBy ? { top: 26, textStyle: { color: "#aaa" } } : undefined,
       xAxis: { type: "category", data: xData, axisLabel: { color: "#aaa", rotate: xData.length > 6 ? 30 : 0 }, axisLine: { lineStyle: { color: "#333" } } },
       yAxis: { type: "value", axisLabel: { color: "#aaa" }, splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
-      series: [{ type: "bar", name: y_key, data: yData, itemStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "#6366f1" }, { offset: 1, color: "#a78bfa" }] }, borderRadius: [4, 4, 0, 0] }, emphasis: { itemStyle: { color: "#818cf8" } } }],
+      series: hasColorBy
+        ? buildSeriesByColor("bar", true)
+        : [{ type: "bar", name: y_key, data: yData, itemStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "#6366f1" }, { offset: 1, color: "#a78bfa" }] }, borderRadius: [4, 4, 0, 0] }, emphasis: { itemStyle: { color: "#818cf8" } } }],
     };
   }
 
   if (chart_type === "line" || chart_type === "area") {
     return {
       ...BASE,
+      legend: hasColorBy ? { top: 26, textStyle: { color: "#aaa" } } : undefined,
       xAxis: { type: "category", data: xData, axisLabel: { color: "#aaa" }, axisLine: { lineStyle: { color: "#333" } } },
       yAxis: { type: "value", axisLabel: { color: "#aaa" }, splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } } },
-      series: [{ type: "line", name: y_key, data: yData, smooth: true, lineStyle: { color: "#6366f1", width: 2 }, itemStyle: { color: "#6366f1" }, areaStyle: chart_type === "area" ? { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(99,102,241,0.35)" }, { offset: 1, color: "rgba(99,102,241,0.01)" }] } } : undefined }],
+      series: hasColorBy
+        ? buildSeriesByColor("line", chart_type === "area")
+        : [{ type: "line", name: y_key, data: yData, smooth: true, lineStyle: { color: "#6366f1", width: 2 }, itemStyle: { color: "#6366f1" }, areaStyle: chart_type === "area" ? { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: "rgba(99,102,241,0.35)" }, { offset: 1, color: "rgba(99,102,241,0.01)" }] } } : undefined }],
     };
   }
 
   if (chart_type === "pie") {
     const pieData = data.map((row) => ({ name: String(row[x_key] ?? ""), value: Number(row[y_key] ?? 0) }));
-    const COLORS = ["#6366f1", "#a78bfa", "#f59e0b", "#34d399", "#f472b6", "#60a5fa"];
     return {
       ...BASE,
       legend: { orient: "vertical", right: "2%", top: "center", textStyle: { color: "#aaa" }, type: "scroll" },
@@ -453,8 +503,13 @@ export default function Chat() {
         aiMsg.content = chatData.answer;
       }
 
+      if (chatData?.charts?.length) {
+        aiMsg.charts = chatData.charts.filter((o) => o.data?.length > 0);
+      }
+
       if (queryData && !queryData.cannot_answer && queryData.options?.length) {
-        aiMsg.charts = queryData.options.filter((o) => o.data?.length > 0);
+        const queryCharts = queryData.options.filter((o) => o.data?.length > 0);
+        aiMsg.charts = [...(aiMsg.charts || []), ...queryCharts];
       }
 
       if (queryData?.cannot_answer && !aiMsg.content && !aiMsg.alert) {

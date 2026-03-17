@@ -60,6 +60,8 @@ return a structured JSON specification that can be executed and rendered.
 - ONLY use column names from VALID COLUMNS above
 - Always alias aggregations: SUM(revenue) AS revenue
 - Always ROUND float aggregations: ROUND(AVG(price), 2) AS avg_price
+- Aggregate cumulatively when entities repeat (e.g., multiple category rows per city)
+- If two grouping dimensions are relevant, include both in SELECT and GROUP BY
 - Pie charts MUST include LIMIT 6 (only top 6 categories ever)
 - line / area chart: X must be a date column
 - bar chart: X is categorical, Y is numeric
@@ -71,6 +73,10 @@ return a structured JSON specification that can be executed and rendered.
 - area  → cumulative growth over time
 - pie   → proportional share of a whole (max 6 slices)
 - scatter → correlation between two numeric values
+- If query asks for main entity + sub-category (e.g., city and category), use:
+    - x_key = primary dimension (city)
+    - color_by = secondary dimension (category)
+    - y_key = aggregated metric
 
 === HALLUCINATION RULES (CRITICAL) ===
 - If any required column does NOT exist in VALID COLUMNS → set cannot_answer: true
@@ -92,6 +98,7 @@ Return ONLY valid JSON. No markdown. No explanation. No code fences.
       "x_key": "col1",
       "y_key": "col2",
       "color_by": null,
+            "aggregation": "sum|avg|count|min|max",
       "title": "Short executive title (max 8 words)",
       "approach": "One sentence explaining why this chart type fits"
     }}
