@@ -58,13 +58,17 @@ async def api_health() -> dict:
     - Server is running
     - MongoDB connection is active
     - System timestamp
+    - Gemini API quota status
     """
+    from llm.quota_manager import quota_manager
+    
     health_status: Dict[str, Any] = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "services": {
             "api": "healthy",
-            "database": "unknown"
+            "database": "unknown",
+            "gemini_quota": "unknown"
         }
     }
     
@@ -83,6 +87,21 @@ async def api_health() -> dict:
     except Exception as e:
         health_status["services"]["database"] = f"error: {str(e)}"
         health_status["status"] = "degraded"
+    
+    # Check Gemini API quota status
+    try:
+        quota_available = quota_manager.is_quota_available()
+        if quota_available:
+            health_status["services"]["gemini_quota"] = "available"
+            health_status["gemini_requests_used"] = quota_manager.daily_requests
+        else:
+            health_status["services"]["gemini_quota"] = "exhausted"
+            health_status["gemini_requests_used"] = quota_manager.daily_requests
+            health_status["quota_reset_time"] = quota_manager.quota_exhausted_until.isoformat() if quota_manager.quota_exhausted_until else None
+            if health_status["status"] == "healthy":
+                health_status["status"] = "limited"  # Still functional but with limitations
+    except Exception as e:
+        health_status["services"]["gemini_quota"] = f"error: {str(e)}"
     
     return health_status
 

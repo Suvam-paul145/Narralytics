@@ -17,6 +17,7 @@ from google import genai
 
 from config import settings
 from llm.genai_client import generate_with_retry
+from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
@@ -161,8 +162,8 @@ def generate_query_spec(
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model="gemini-2.5-flash",
-            contents=full_prompt,
+            model="models/gemini-2.5-flash",
+            contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
         raw = response.text
         cleaned = _clean_json(raw)
@@ -173,4 +174,13 @@ def generate_query_spec(
             "reason": "The AI returned a malformed response. Please rephrase your question.",
         }
     except Exception as exc:
+        # Use intelligent fallback if quota exhausted
+        if "QUOTA_EXHAUSTED" in str(exc):
+            return quota_manager.get_fallback_response(
+                "query_generation",
+                prompt=enhanced_prompt,
+                schema=schema,
+                output_count=output_count
+            )
+        
         return {"cannot_answer": True, "reason": str(exc)}

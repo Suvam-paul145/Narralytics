@@ -1,4 +1,5 @@
 import time
+from typing import Any, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -14,12 +15,31 @@ from sqlite.executor import execute_query
 router = APIRouter(tags=["query"])
 
 
+class QueryHistoryTurn(TypedDict):
+    role: str
+    content: str
+
+
+class DatasetSchema(TypedDict):
+    row_count: int
+    columns: list[dict[str, Any]]
+    date_columns: list[str]
+    numeric_columns: list[str]
+    categorical_columns: list[str]
+
+
+class QuerySpecPayload(TypedDict, total=False):
+    cannot_answer: bool
+    reason: str
+    options: list[dict[str, Any]]
+
+
 def _execute_options_with_retry(
-    raw_options: list[dict],
+    raw_options: list[dict[str, Any]],
     db_path: str,
     prompt: str,
-    schema: dict,
-    history: list[dict],
+    schema: DatasetSchema,
+    history: list[QueryHistoryTurn],
     output_count: int,
     max_retries: int = 2,
 ) -> list[ChartResult]:
@@ -27,7 +47,7 @@ def _execute_options_with_retry(
     Execute all SQL options. On any failure, re-prompt the LLM with the error
     message (self-healing loop). Max 2 retries per option set.
     """
-    retries: int = 0
+    retries = 0
     current_options = raw_options
 
     while retries <= max_retries:
@@ -39,7 +59,7 @@ def _execute_options_with_retry(
             try:
                 data = execute_query(db_path, spec.sql)
 
-                # Stage 5: data-driven insight (after data fetched, no hallucination)
+                # Stage 5: data-driven insight after data fetch, with no hallucination.
                 if data:
                     spec.insight = generate_data_driven_insight(
                         prompt, spec.title, spec.chart_type, data
@@ -55,36 +75,35 @@ def _execute_options_with_retry(
                     ChartResult(spec=spec, data=[], raw_sql=spec.sql, error=str(exc))
                 )
 
-        has_errors = bool(error_msgs)
-
-        if not has_errors or retries >= max_retries:
+        if not error_msgs or retries >= max_retries:
             return results
 
-        # Self-healing: tell LLM about the exact errors and ask it to fix
-        retries += 1
-        all_columns = [col["name"] for col in schema["columns"]]
+        retries = retries + 1
+        all_columns = [str(col["name"]) for col in schema["columns"]]
         error_text = "\n".join(error_msgs)
         retry_prompt = (
             f"The query '{prompt}' produced SQL errors:\n{error_text}\n\n"
             f"Valid columns are: {', '.join(all_columns)}\n"
             f"Fix the SQL. Return only corrected JSON."
         )
+        retry_history: list[QueryHistoryTurn] = [
+            *history,
+            {"role": "user", "content": prompt},
+            {"role": "model", "content": "Encountered SQL errors. Retrying."},
+        ]
 
-        retry_llm = generate_query_spec(
+        retry_llm: QuerySpecPayload = generate_query_spec(
             enhanced_prompt=retry_prompt,
             schema=schema,
             output_count=output_count,
-            history=history + [  # type: ignore
-                {"role": "user", "content": prompt},
-                {"role": "model", "content": "Encountered SQL errors. Retrying."},
-            ],
+            history=retry_history,
         )
 
         if retry_llm.get("cannot_answer"):
-            # LLM gave up; return what we have (with errors)
             return results
 
-        current_options = retry_llm.get("options", current_options)
+        if "options" in retry_llm:
+            current_options = retry_llm["options"]
 
     return results
 
@@ -95,20 +114,20 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    schema = {
+    schema: DatasetSchema = {
         "row_count": dataset["row_count"],
         "columns": dataset["columns"],
         "date_columns": dataset["date_columns"],
         "numeric_columns": dataset["numeric_columns"],
         "categorical_columns": dataset["categorical_columns"],
     }
-    history = [turn.model_dump() for turn in request.history]
+    history: list[QueryHistoryTurn] = [
+        {"role": turn.role, "content": turn.content} for turn in request.history
+    ]
     started_at = time.perf_counter()
 
-    # ── Stage 2a: Prompt Enhancement ──────────────────────────────────────────
     enhanced = enhance_prompt(request.prompt, schema, history)
 
-    # Catch CANNOT_ANSWER from the prompt enhancer
     if enhanced.startswith("[CANNOT_ANSWER]"):
         reason = enhanced.replace("[CANNOT_ANSWER]", "").strip()
         await save_interaction(
@@ -132,8 +151,7 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
             output_count=request.output_count,
         )
 
-    # ── Stage 2b: SQL + Chart Spec Generation ─────────────────────────────────
-    llm_result = generate_query_spec(
+    llm_result: QuerySpecPayload = generate_query_spec(
         enhanced_prompt=enhanced,
         schema=schema,
         output_count=request.output_count,
@@ -162,9 +180,9 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
             output_count=request.output_count,
         )
 
-    # ── Stage 3: Execute with Self-Healing Fallback ───────────────────────────
+    raw_options = llm_result["options"] if "options" in llm_result else []
     options = _execute_options_with_retry(
-        raw_options=llm_result.get("options", []),
+        raw_options=raw_options,
         db_path=dataset["db_path"],
         prompt=request.prompt,
         schema=schema,
@@ -172,7 +190,7 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
         output_count=request.output_count,
     )
 
-    if not options or all(o.error for o in options):
+    if not options or all(option.error for option in options):
         return QueryResponse(
             cannot_answer=True,
             reason="The AI could not generate a valid chart for your query. Please try rephrasing or upload a different dataset.",
@@ -189,9 +207,9 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
             "dataset_id": request.dataset_id,
             "prompt": request.prompt,
             "enhanced_prompt": enhanced,
-            "response_summary": " | ".join(o.spec.title for o in options),
-            "chart_types": " / ".join(o.spec.chart_type for o in options),
-            "sql_generated": "\n\n".join(o.raw_sql or "" for o in options),
+            "response_summary": " | ".join(option.spec.title for option in options),
+            "chart_types": " / ".join(option.spec.chart_type for option in options),
+            "sql_generated": "\n\n".join(option.raw_sql or "" for option in options),
             "output_count": request.output_count,
             "was_forecast": False,
             "execution_ms": elapsed_ms,

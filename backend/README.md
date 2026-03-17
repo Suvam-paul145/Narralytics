@@ -20,6 +20,36 @@ Narralytics is an AI-powered business intelligence platform that:
 
 ---
 
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.10+ (Recommended: Python 3.14+)
+- MongoDB (local or Atlas)
+- Google Gemini API key
+
+### Installation
+```bash
+# 1. Navigate to backend directory
+cd backend
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Configure environment
+cp .env.example .env
+# Edit .env with your API keys and configuration
+
+# 4. Start the server
+python start_server.py
+```
+
+### Access Points
+- **API Server**: http://localhost:8000
+- **Interactive Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+
+---
+
 ## 🏗️ Architecture Overview
 
 ```

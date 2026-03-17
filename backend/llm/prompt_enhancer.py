@@ -12,6 +12,7 @@ from google import genai
 
 from config import settings
 from llm.genai_client import generate_with_retry
+from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
@@ -86,8 +87,8 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model="gemini-2.5-flash",
-            contents=full_prompt,
+            model="models/gemini-2.5-flash",
+            contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
         enhanced = response.text.strip()
 
@@ -98,4 +99,13 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
         return enhanced
     except Exception as exc:
         print(f"[prompt_enhancer] fallback to raw prompt due to: {exc}")
+        
+        # Use intelligent fallback if quota exhausted
+        if "QUOTA_EXHAUSTED" in str(exc):
+            return quota_manager.get_fallback_response(
+                "prompt_enhancement", 
+                raw_prompt=raw, 
+                schema=schema
+            )
+        
         return raw

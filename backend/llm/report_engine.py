@@ -4,6 +4,7 @@ from google import genai
 
 from config import settings
 from llm.genai_client import generate_with_retry
+from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
@@ -37,9 +38,17 @@ Return only the paragraph text.
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model='gemini-2.5-flash',
-            contents=prompt
+            model='models/gemini-2.5-flash',
+            contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
         return response.text.strip()
-    except Exception:
+    except Exception as exc:
+        # Use intelligent fallback if quota exhausted
+        if "QUOTA_EXHAUSTED" in str(exc):
+            return quota_manager.get_fallback_response(
+                "report_summary",
+                dataset_name=dataset_name,
+                charts=charts
+            )
+        
         return "Executive summary unavailable. Review the charts below for the key findings."

@@ -124,7 +124,7 @@ If you cannot answer, return:
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model='gemini-2.5-flash',
+            model='models/gemini-2.5-flash',
             contents=contents
         )
         return _parse_json_payload(response.text)
@@ -153,8 +153,8 @@ Keep it professional, punchy, and include actual numbers from the data. Do NOT e
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model='gemini-2.5-flash',
-            contents=system_prompt
+            model='models/gemini-2.5-flash',
+            contents=[{"role": "user", "parts": [{"text": system_prompt}]}]
         )
         return response.text.replace('\n', ' ').strip()
     except Exception as exc:
