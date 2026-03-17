@@ -17,16 +17,40 @@ from storage.local import save_upload
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
+import chardet
+
 def _parse_uploaded_dataframe(filename: str, content: bytes) -> pd.DataFrame:
     suffix = Path(filename).suffix.lower()
+    
+    # --- Binary signature protection ---
+    # Check for Apple Binary Plist (bplist00) or Zip (PK\x03\x04) misidentified as CSV
+    if content.startswith(b"bplist00"):
+        raise HTTPException(
+            status_code=422, 
+            detail="The file appears to be a Binary Plist. Only CSV and Excel files are supported."
+        )
+    if content.startswith(b"PK\x03\x04") and suffix == ".csv":
+        raise HTTPException(
+            status_code=422,
+            detail="Binary Zip signature detected in CSV. Is this a renamed .xlsx or .zip file?"
+        )
+
     buffer = BytesIO(content)
     try:
         if suffix == ".csv":
+            # 1. Detect encoding accurately
+            detection = chardet.detect(content)
+            encoding = detection.get("encoding", "utf-8")
+            
             try:
-                return pd.read_csv(buffer)
-            except UnicodeDecodeError:
+                # 2. Try reading with detected encoding
+                return pd.read_csv(buffer, encoding=encoding)
+            except (UnicodeDecodeError, pd.errors.ParserError):
+                # 3. Fallback to latin1 if still failing
                 buffer.seek(0)
                 return pd.read_csv(buffer, encoding="latin1")
+        
+        # Excel handling (read_excel handles its own binary detection)
         return pd.read_excel(buffer)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Could not parse file: {exc}") from exc

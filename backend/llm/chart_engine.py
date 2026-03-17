@@ -96,7 +96,7 @@ Return valid JSON only:
       "y_key": "col_name",
       "color_by": null,
       "title": "Short executive title",
-      "insight": "One finding with a real number"
+      "insight": "Predictive expectation (no hallucinated exact numbers)"
     }}
   ]
 }}
@@ -127,3 +127,31 @@ If you cannot answer, return:
         return _parse_json_payload(response.text)
     except Exception as exc:
         return {"cannot_answer": True, "reason": str(exc)}
+
+def generate_data_driven_insight(prompt: str, chart_title: str, chart_type: str, data: list[dict]) -> str:
+    """Stage 5: Data-driven insight generation based on actual aggregated data"""
+    if not data:
+        return "No data returned to generate an insight."
+        
+    data_sample = data[:30]
+    
+    system_prompt = f"""
+You are an expert data analyst. Look at these aggregate results and summarize the key takeaway in 1 to 2 short sentences.
+Original Query: {prompt}
+Chart Title: {chart_title}
+Chart Type: {chart_type}
+
+Aggregated Data (up to 30 rows):
+{json.dumps(data_sample, default=str)}
+
+Keep it professional, punchy, and include actual numbers from the data. Do NOT explain what the chart is. Just give the business takeaway.
+"""
+    try:
+        client = _get_client()
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=system_prompt
+        )
+        return response.text.replace('\n', ' ').strip()
+    except Exception as exc:
+        return "Could not generate insight."

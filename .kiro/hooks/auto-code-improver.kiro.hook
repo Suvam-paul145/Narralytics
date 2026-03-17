@@ -1,0 +1,27 @@
+{
+  "enabled": true,
+  "name": "Auto Code Improver",
+  "description": "Automatically analyzes modified source code files and applies code quality improvements without user confirmation, including fixing code smells, applying design patterns, and implementing best practices",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*.py",
+      "*.js",
+      "*.jsx",
+      "*.ts",
+      "*.tsx",
+      "*.java",
+      "*.cpp",
+      "*.c",
+      "*.cs",
+      "*.rb",
+      "*.go",
+      "*.rs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Automatically analyze and improve the modified code in the recently edited file. Apply fixes for: 1) Code smells and anti-patterns, 2) Better design patterns implementation, 3) Readability and maintainability enhancements, 4) Performance optimizations, 5) Language/framework best practices. Make the improvements directly to the code without asking for confirmation, ensuring existing functionality is preserved. Focus on actionable changes that enhance code quality."
+  }
+}

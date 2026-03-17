@@ -20,7 +20,14 @@ def execute_query(db_path: str, sql: str) -> list[dict]:
     try:
         connection.execute("PRAGMA query_only = ON")
         cursor = connection.cursor()
-        cursor.execute(normalized_sql)
+        
+        # Automatic protection limit
+        if "limit" not in normalized_sql.lower():
+            safe_sql = f"{normalized_sql} LIMIT 5000"
+        else:
+            safe_sql = normalized_sql
+            
+        cursor.execute(safe_sql)
         return [dict(row) for row in cursor.fetchall()]
     except sqlite3.Error as exc:
         raise ValueError(f"SQL error: {exc}") from exc

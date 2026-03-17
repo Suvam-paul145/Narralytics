@@ -26,7 +26,7 @@ def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_csv_to_sqlite(df: pd.DataFrame, db_path: str, table_name: str = "data") -> str:
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     normalized = _normalize_dataframe(df)
     connection = sqlite3.connect(db_path)
     try:

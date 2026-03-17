@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Code Quality Analyzer",
+  "description": "Analyzes modified source code files for potential improvements, code smells, design patterns, and best practices to enhance readability, maintainability, performance and maintain code modularity as per the industry standard",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "backend",
+      "\\",
+      "frontend"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Analyze the modified code in the recently edited file for potential improvements. Focus on: 1) Code smells and anti-patterns, 2) Opportunities to apply better design patterns, 3) Readability and maintainability improvements, 4) Performance optimizations, 5) Best practices for the specific language/framework. Provide specific, actionable suggestions while preserving existing functionality.\n\nIf needed remove redundant code and .py file which is not reqired along with that store .py file in a folder name which it suits which exists in the root dir of backend folder"
+  },
+  "workspaceFolderName": "Narralytics",
+  "shortName": "code-quality-analyzer"
+}

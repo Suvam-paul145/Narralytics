@@ -48,6 +48,9 @@ def test_environment_variables():
         if not var_value or var_value == "":
             print(f"ERROR {var_name}: Not set or empty")
             all_good = False
+        elif isinstance(var_value, str) and (var_value.startswith('your-') or '<YOUR_' in var_value):
+            print(f"ERROR {var_name}: Placeholder value detected. Please provide actual credentials.")
+            all_good = False
         elif var_name == 'JWT_SECRET' and len(var_value) < 32:
             print(f"WARN {var_name}: Too short (should be 32+ characters)")
             all_good = False
@@ -177,6 +180,7 @@ def main():
         print("1. Start the server: uvicorn main:app --reload --host 0.0.0.0 --port 8000")
         print("2. Test health endpoint: http://localhost:8000/health")
         print("3. View API docs: http://localhost:8000/docs")
+        sys.exit(0)
     else:
         print("ERROR Some configuration tests failed!")
         print("\nPlease fix the issues above before starting the server.")
@@ -184,6 +188,7 @@ def main():
         if not env_ok:
             print("\nEnvironment Variable Issues:")
             print("- Check your .env file exists and has all required values")
+            #print("- Ensure you've replaced placeholders like '<YOUR_CLIENT_ID>' with real credentials")
             print("- Generate JWT secret: python -c \"import secrets; print(secrets.token_hex(32))\"")
             
         if not files_ok:
@@ -195,6 +200,8 @@ def main():
             print("\nDependency Issues:")
             print("- Install missing packages: pip install -r requirements.txt")
             print("- Make sure virtual environment is activated")
+        
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
