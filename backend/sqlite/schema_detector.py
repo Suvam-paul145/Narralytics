@@ -3,7 +3,7 @@ import pandas as pd
 
 def detect_schema(df: pd.DataFrame) -> dict:
     schema = {
-        "row_count": len(df),
+        "row_count": int(len(df)),
         "columns": [],
         "date_columns": [],
         "numeric_columns": [],
@@ -32,7 +32,14 @@ def detect_schema(df: pd.DataFrame) -> dict:
                 column_info["max_date"] = str(series.max().date())
             schema["date_columns"].append(column_name)
         else:
-            parsed = pd.to_datetime(series, errors="coerce")
+            # Avoid Pandas 2.x warning by being explicit
+            try:
+                # 'format="mixed"' is the modern way to handle varied formats without warnings
+                parsed = pd.to_datetime(series, errors="coerce", format="mixed")
+            except (TypeError, ValueError):
+                # Fallback for older pandas or specifically tricky parsing
+                parsed = pd.to_datetime(series, errors="coerce")
+
             if parsed.notna().sum() > len(df) * 0.8:
                 column_info["dtype"] = "datetime"
                 if len(parsed.dropna()):

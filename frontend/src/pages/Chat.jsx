@@ -280,6 +280,59 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [isExporting, setIsExporting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [greeting, setGreeting] = useState("Good morning");
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    setMounted(true);
+    const h = new Date().getHours();
+    if (h >= 12 && h < 17) setGreeting("Good afternoon");
+    else if (h >= 17) setGreeting("Good evening");
+  }, []);
+
+  // ── Handle File Upload ───────────────────────────────────────────────────
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadFilename(file.name);
+    setUploadProgress(10);
+    setUploadError("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_BASE}/datasets/upload`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Upload failed");
+      }
+
+      setUploadProgress(100);
+      const data = await response.json();
+      setDataset(data);
+      
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        role: "assistant",
+        content: `Successfully loaded "${file.name}" (${data.row_count.toLocaleString()} rows). What would you like to analyze?`
+      }]);
+    } catch (err) {
+      setUploadError(err.message);
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadProgress(0), 1000);
+    }
+  };
 
   // ── Report Export ────────────────────────────────────────────────────────
   const handleExportReport = async () => {

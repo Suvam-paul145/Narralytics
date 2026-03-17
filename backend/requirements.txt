@@ -22,3 +22,6 @@ google-api-python-client
 scikit-learn
 statsmodels
 cryptography
+chardet
+requests
+urllib3<2.0.0

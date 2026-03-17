@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from datetime import datetime
+from typing import Any, Dict
 
 from config import settings
 from database.mongodb import close_mongodb, connect_mongodb, client
@@ -58,7 +59,7 @@ async def api_health() -> dict:
     - MongoDB connection is active
     - System timestamp
     """
-    health_status = {
+    health_status: Dict[str, Any] = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "services": {

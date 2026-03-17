@@ -4,6 +4,7 @@ from functools import lru_cache
 from google import genai
 
 from config import settings
+from llm.genai_client import generate_with_retry
 
 
 @lru_cache(maxsize=1)
@@ -84,7 +85,8 @@ def get_chat_response(schema: dict, dataset_filename: str, message: str, history
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model='gemini-2.5-flash',
             contents=contents
         )
@@ -111,7 +113,8 @@ Return only the final answer text.
 """
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model='gemini-2.5-flash',
             contents=prompt
         )

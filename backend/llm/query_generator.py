@@ -16,6 +16,7 @@ from functools import lru_cache
 from google import genai
 
 from config import settings
+from llm.genai_client import generate_with_retry
 
 
 @lru_cache(maxsize=1)
@@ -32,13 +33,13 @@ def _clean_json(raw: str) -> str:
         parts = text.split("```")
         text = parts[1] if len(parts) > 1 else text
         if text.startswith("json"):
-            text = text[4:].strip()
+            text = text[4:].strip()  # type: ignore
 
     # Find outermost { ... }
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
+        return text[start : end + 1]  # type: ignore
     return text
 
 
@@ -105,7 +106,7 @@ def generate_query_spec(
     enhanced_prompt: str,
     schema: dict,
     output_count: int = 1,
-    history: list | None = None,
+    history: list[dict] | None = None,
 ) -> dict:
     """
     Generate a chart spec from an enhanced prompt.
@@ -144,7 +145,7 @@ def generate_query_spec(
 
     history_text = ""
     if history:
-        for turn in history[-6:]:
+        for turn in history[-6:]:  # type: ignore
             role = turn.get("role", "user").upper()
             history_text += f"\n{role}: {turn.get('content', '')}"
 
@@ -158,7 +159,8 @@ def generate_query_spec(
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model="gemini-2.5-flash",
             contents=full_prompt,
         )

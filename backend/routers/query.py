@@ -15,11 +15,11 @@ router = APIRouter(tags=["query"])
 
 
 def _execute_options_with_retry(
-    raw_options: list,
+    raw_options: list[dict],
     db_path: str,
     prompt: str,
     schema: dict,
-    history: list,
+    history: list[dict],
     output_count: int,
     max_retries: int = 2,
 ) -> list[ChartResult]:
@@ -27,7 +27,7 @@ def _execute_options_with_retry(
     Execute all SQL options. On any failure, re-prompt the LLM with the error
     message (self-healing loop). Max 2 retries per option set.
     """
-    retries = 0
+    retries: int = 0
     current_options = raw_options
 
     while retries <= max_retries:
@@ -74,7 +74,7 @@ def _execute_options_with_retry(
             enhanced_prompt=retry_prompt,
             schema=schema,
             output_count=output_count,
-            history=history + [
+            history=history + [  # type: ignore
                 {"role": "user", "content": prompt},
                 {"role": "model", "content": "Encountered SQL errors. Retrying."},
             ],

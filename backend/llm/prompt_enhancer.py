@@ -11,6 +11,7 @@ from functools import lru_cache
 from google import genai
 
 from config import settings
+from llm.genai_client import generate_with_retry
 
 
 @lru_cache(maxsize=1)
@@ -57,7 +58,7 @@ def build_schema_text(schema: dict) -> str:
     return "\n".join(lines)
 
 
-def enhance_prompt(raw: str, schema: dict, history: list | None = None) -> str:
+def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) -> str:
     """
     Enhance a vague user prompt into a schema-grounded analytical instruction.
 
@@ -69,7 +70,7 @@ def enhance_prompt(raw: str, schema: dict, history: list | None = None) -> str:
 
     history_text = ""
     if history:
-        for turn in history[-4:]:
+        for turn in history[-4:]:  # type: ignore
             role = turn.get("role", "user").upper()
             content = turn.get("content", "")
             history_text += f"\n{role}: {content}"
@@ -83,7 +84,8 @@ def enhance_prompt(raw: str, schema: dict, history: list | None = None) -> str:
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model="gemini-2.5-flash",
             contents=full_prompt,
         )

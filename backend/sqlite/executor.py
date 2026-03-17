@@ -33,3 +33,5 @@ def execute_query(db_path: str, sql: str) -> list[dict]:
         raise ValueError(f"SQL error: {exc}") from exc
     finally:
         connection.close()
+    
+    return []

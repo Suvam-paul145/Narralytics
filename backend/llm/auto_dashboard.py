@@ -4,6 +4,7 @@ from functools import lru_cache
 from google import genai
 
 from config import settings
+from llm.genai_client import generate_with_retry
 
 
 @lru_cache(maxsize=1)
@@ -110,7 +111,8 @@ def generate_auto_dashboard(schema: dict) -> list[dict]:
     prompt = build_auto_dashboard_prompt(schema)
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model='gemini-2.5-flash',
             contents=prompt
         )

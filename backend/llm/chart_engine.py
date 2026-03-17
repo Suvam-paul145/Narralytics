@@ -1,9 +1,11 @@
 import json
 from functools import lru_cache
+from typing import Any
 
 from google import genai
 
 from config import settings
+from llm.genai_client import generate_with_retry
 
 
 @lru_cache(maxsize=1)
@@ -14,21 +16,21 @@ def _get_client():
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-def _parse_json_payload(raw: str) -> dict:
+def _parse_json_payload(raw: str) -> dict[str, Any]:
     text = raw.strip()
     if text.startswith("```"):
         parts = text.split("```")
         text = parts[1] if len(parts) > 1 else text
         if text.startswith("json"):
-            text = text[4:].strip()
+            text = text[4:].strip()  # type: ignore
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1:
         raise ValueError("Model response did not contain JSON")
-    return json.loads(text[start : end + 1])
+    return json.loads(text[start : end + 1])  # type: ignore
 
 
-def get_chart_specs(schema: dict, prompt: str, history: list, output_count: int = 1) -> dict:
+def get_chart_specs(schema: dict[str, Any], prompt: str, history: list[dict[str, Any]], output_count: int = 1) -> dict[str, Any]:
     columns_text = "\n".join(
         [
             f"  {column['name']} ({column['dtype']})"
@@ -106,7 +108,7 @@ If you cannot answer, return:
 
     # Convert history to new format
     contents = []
-    for turn in history[-6:]:
+    for turn in history[-6:]:  # type: ignore
         contents.append({
             "role": turn["role"],
             "parts": [{"text": turn["content"]}]
@@ -120,7 +122,8 @@ If you cannot answer, return:
 
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model='gemini-2.5-flash',
             contents=contents
         )
@@ -133,7 +136,7 @@ def generate_data_driven_insight(prompt: str, chart_title: str, chart_type: str,
     if not data:
         return "No data returned to generate an insight."
         
-    data_sample = data[:30]
+    data_sample = data[:30]  # type: ignore
     
     system_prompt = f"""
 You are an expert data analyst. Look at these aggregate results and summarize the key takeaway in 1 to 2 short sentences.
@@ -148,7 +151,8 @@ Keep it professional, punchy, and include actual numbers from the data. Do NOT e
 """
     try:
         client = _get_client()
-        response = client.models.generate_content(
+        response = generate_with_retry(
+            client=client,
             model='gemini-2.5-flash',
             contents=system_prompt
         )

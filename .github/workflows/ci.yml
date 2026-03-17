@@ -112,16 +112,19 @@ jobs:
           HAS_ESLINT=0
           npm ls eslint > /dev/null 2>&1 && HAS_ESLINT=1
           HAS_LINT_SCRIPT=0
-          node - <<'NODE' && HAS_LINT_SCRIPT=1
-const fs = require('fs');
-try {
-  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  process.exit(pkg.scripts && pkg.scripts.lint ? 0 : 1);
-} catch (err) {
-  console.error('Failed to parse package.json in current directory to check for lint script:', process.cwd(), err);
-  process.exit(1);
-}
-NODE
+          if node - <<'NODE'
+          const fs = require('fs');
+          try {
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            process.exit(pkg.scripts && pkg.scripts.lint ? 0 : 1);
+          } catch (err) {
+            console.error('Failed to parse package.json in current directory to check for lint script:', process.cwd(), err);
+            process.exit(1);
+          }
+          NODE
+          then
+            HAS_LINT_SCRIPT=1
+          fi
 
           if [ "$HAS_ESLINT" -eq 1 ] && [ "$HAS_LINT_SCRIPT" -eq 1 ]; then
             npm run lint
