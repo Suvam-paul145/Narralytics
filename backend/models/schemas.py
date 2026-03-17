@@ -35,6 +35,7 @@ class ChartSpec(BaseModel):
     title: str
     insight: str | None = None
     category: str | None = None
+    aggregation: str | None = None
 
 
 class ChartResult(BaseModel):
@@ -56,6 +57,7 @@ class ChatResponse(BaseModel):
     answer: str
     supporting_sql: str | None = None
     data_used: list[dict[str, Any]] = Field(default_factory=list)
+    charts: list[ChartResult] = Field(default_factory=list)
     cannot_answer: bool = False
     forecast: dict[str, Any] | None = None
     is_forecast: bool = False

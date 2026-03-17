@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from analytics.aggregation_engine import normalize_chart_result
 from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
 from database.history import save_interaction
@@ -27,18 +28,19 @@ async def auto_generate_dashboard(dataset_id: str, user: dict = Depends(get_curr
     results = []
     for spec in chart_specs:
         try:
-            data = execute_query(dataset["db_path"], spec["sql"])
+            raw_data = execute_query(dataset["db_path"], spec["sql"])
+            normalized_spec, data = normalize_chart_result(spec=spec, rows=raw_data, schema=schema)
             results.append(
                 {
-                    "chart_id": spec.get("chart_id"),
-                    "title": spec["title"],
-                    "chart_type": spec["chart_type"],
-                    "x_key": spec["x_key"],
-                    "y_key": spec["y_key"],
-                    "color_by": spec.get("color_by"),
-                    "insight": spec.get("insight"),
-                    "category": spec.get("category"),
-                    "sql": spec["sql"],
+                    "chart_id": normalized_spec.get("chart_id"),
+                    "title": normalized_spec["title"],
+                    "chart_type": normalized_spec["chart_type"],
+                    "x_key": normalized_spec["x_key"],
+                    "y_key": normalized_spec["y_key"],
+                    "color_by": normalized_spec.get("color_by"),
+                    "insight": normalized_spec.get("insight"),
+                    "category": normalized_spec.get("category"),
+                    "sql": normalized_spec["sql"],
                     "data": data,
                     "error": None,
                 }

@@ -275,34 +275,48 @@ class QuotaManager:
     def _get_chat_fallback(self, message: str, schema: Dict, **kwargs) -> Dict[str, Any]:
         """Generate basic chat response without AI"""
         numeric_cols = schema.get('numeric_columns', [])
-        
+
         message_lower = message.lower()
-        
-        # Define response patterns
-        response_patterns = [
-            (['total'], numeric_cols, 
-             f"I can help you calculate the total {numeric_cols[0]}. Due to high demand, I'm using a simplified analysis mode.",
-             f"SELECT SUM({numeric_cols[0]}) as total_{numeric_cols[0]} FROM data"),
-            (['average'], numeric_cols,
-             f"I can show you the average {numeric_cols[0]} from your dataset.",
-             f"SELECT AVG({numeric_cols[0]}) as avg_{numeric_cols[0]} FROM data"),
-            (['count'], True,
-             "I can provide the total number of records in your dataset.",
-             "SELECT COUNT(*) as total_records FROM data"),
-        ]
-        
-        for keywords, condition, answer, sql in response_patterns:
-            if any(keyword in message_lower for keyword in keywords) and condition:
+
+        # Build response patterns dynamically so numeric_cols[0] is only
+        # accessed when the list is non-empty (avoids IndexError on schemas
+        # that have no numeric columns).
+        response_patterns = []
+        if numeric_cols:
+            col = numeric_cols[0]
+            response_patterns.extend([
+                (
+                    ['total'],
+                    f"I can help you calculate the total {col}. Due to high demand, I'm using a simplified analysis mode.",
+                    f"SELECT SUM({col}) as total_{col} FROM data",
+                ),
+                (
+                    ['average'],
+                    f"I can show you the average {col} from your dataset.",
+                    f"SELECT AVG({col}) as avg_{col} FROM data",
+                ),
+            ])
+
+        response_patterns.append(
+            (
+                ['count'],
+                "I can provide the total number of records in your dataset.",
+                "SELECT COUNT(*) as total_records FROM data",
+            )
+        )
+
+        for keywords, answer, sql in response_patterns:
+            if any(keyword in message_lower for keyword in keywords):
                 return {
                     "answer": answer,
                     "supporting_sql": sql,
                     "needs_data": True,
-                    "cannot_answer": False
+                    "cannot_answer": False,
                 }
-        
+
         return {
             "answer": "I'm currently in simplified mode due to high API usage. I can still help with basic data queries like totals, averages, and counts.",
-            "cannot_answer": False
+            "cannot_answer": False,
         }
     
     def _get_query_generation_fallback(self, prompt: str, schema: Dict, **kwargs) -> Dict[str, Any]:

@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from analytics.aggregation_engine import normalize_chart_result
 from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
 from database.history import get_history, save_interaction
 from llm.chat_engine import get_chat_response, refine_chat_answer
+from llm.decision_engine import get_decision_plan
 from llm.forecast_engine import generate_simple_forecast
-from models.schemas import ChatRequest, ChatResponse
+from models.schemas import ChatRequest, ChatResponse, ChartResult, ChartSpec
 from sqlite.executor import execute_query
 
 router = APIRouter(tags=["chat"])
@@ -49,6 +51,7 @@ async def business_chat(request: ChatRequest, user: dict = Depends(get_current_u
     answer = chat_result.get("answer", "")
     supporting_sql = chat_result.get("supporting_sql")
     data_used = []
+    charts: list[ChartResult] = []
 
     if supporting_sql and chat_result.get("needs_data"):
         try:
@@ -60,6 +63,36 @@ async def business_chat(request: ChatRequest, user: dict = Depends(get_current_u
                     answer,
                     data_used,
                 )
+
+                decision = get_decision_plan(
+                    message=request.message,
+                    schema=schema,
+                    rows=data_used,
+                    supporting_sql=supporting_sql,
+                )
+                raw_spec = {
+                    "label": "Chat Option",
+                    "approach": decision.get("reasoning"),
+                    "sql": supporting_sql,
+                    "chart_type": decision.get("chart_type", "bar"),
+                    "x_key": decision.get("x_key"),
+                    "y_key": decision.get("y_key"),
+                    "color_by": decision.get("color_by"),
+                    "title": decision.get("title", "Analysis Result"),
+                    "insight": answer,
+                    "aggregation": decision.get("aggregation", "sum"),
+                }
+
+                if raw_spec.get("x_key") and raw_spec.get("y_key"):
+                    normalized_spec_payload, chart_data = normalize_chart_result(
+                        spec=raw_spec,
+                        rows=data_used,
+                        schema=schema,
+                    )
+                    chart_spec = ChartSpec(**normalized_spec_payload)
+                    charts.append(
+                        ChartResult(spec=chart_spec, data=chart_data, raw_sql=supporting_sql)
+                    )
         except Exception as exc:
             print(f"Chat SQL execution failed: {exc}")
 
@@ -91,6 +124,7 @@ async def business_chat(request: ChatRequest, user: dict = Depends(get_current_u
         answer=answer,
         supporting_sql=supporting_sql,
         data_used=data_used[:10],
+        charts=charts,
         forecast=forecast,
         is_forecast=is_forecast,
         disclaimer=disclaimer,
