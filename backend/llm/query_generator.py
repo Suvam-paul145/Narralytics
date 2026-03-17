@@ -1,18 +1,18 @@
 import json
 import logging
 from functools import lru_cache
-from google import genai
+from groq import Groq
 from config import settings
-from llm.genai_client import generate_with_retry
+from llm.genai_client import generate_with_retry, _GROQ_MODEL
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
-def _get_client() -> genai.Client:
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+def _get_client() -> Groq:
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+    return Groq(api_key=settings.GROQ_API_KEY)
 
 def _clean_json(raw: str) -> str:
     text = raw.strip()
@@ -89,7 +89,7 @@ def generate_query_spec(enhanced_prompt: str, schema: dict, output_count: int = 
         logger.info(f"[query_generator] Requesting LLM for schema query")
         response = generate_with_retry(
             client=client,
-            model="models/gemini-2.5-flash",
+            model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": full_prompt}]}]
         )
         raw = response.text

@@ -3,16 +3,16 @@ import logging
 from functools import lru_cache
 from typing import Dict, List, Optional, Any
 
-from google import genai
+from groq import Groq
 
 from config import settings
-from llm.genai_client import generate_with_retry
+from llm.genai_client import generate_with_retry, _GROQ_MODEL
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
 
 # Constants for better maintainability
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = _GROQ_MODEL
 MIN_CHARTS = 6
 MAX_CHARTS = 10
 MAX_PIE_CATEGORIES = 6
@@ -33,23 +33,23 @@ DTYPE_CATEGORICAL = "categorical"
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> genai.Client:
-    """Get the Google GenAI client with API key configuration.
+def _get_client() -> Groq:
+    """Get the Groq client with API key configuration.
     
     Returns:
-        genai.Client: Configured GenAI client
+        Groq: Configured Groq client
         
     Raises:
-        RuntimeError: If GEMINI_API_KEY is not configured
+        RuntimeError: If GROQ_API_KEY is not configured
     """
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured")
     
     try:
-        return genai.Client(api_key=settings.GEMINI_API_KEY)
+        return Groq(api_key=settings.GROQ_API_KEY)
     except Exception as e:
-        logger.error(f"Failed to initialize GenAI client: {e}")
-        raise RuntimeError(f"GenAI client initialization failed: {e}") from e
+        logger.error(f"Failed to initialize Groq client: {e}")
+        raise RuntimeError(f"Groq client initialization failed: {e}") from e
 
 
 def _parse_json_payload(raw: str) -> Dict[str, Any]:

@@ -3,10 +3,10 @@ import logging
 from functools import lru_cache
 from typing import Dict, List, Optional, Union
 
-from google import genai
+from groq import Groq
 
 from config import settings
-from llm.genai_client import generate_with_retry
+from llm.genai_client import generate_with_retry, _GROQ_MODEL
 from llm.quota_manager import quota_manager
 
 # Configure logger for this module
@@ -24,18 +24,18 @@ class JSONParsingError(ChatEngineError):
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> genai.Client:
-    """Get the Google GenAI client with API key configuration
+def _get_client() -> Groq:
+    """Get the Groq client instance.
     
     Returns:
-        genai.Client: Configured Google GenAI client
+        Groq: Configured Groq client
         
     Raises:
-        RuntimeError: If GEMINI_API_KEY is not configured
+        RuntimeError: If GROQ_API_KEY is not configured
     """
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+    return Groq(api_key=settings.GROQ_API_KEY)
 
 
 def _parse_json_payload(raw: str) -> Dict:
@@ -189,7 +189,7 @@ def get_chat_response(
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model='models/gemini-2.5-flash',
+            model=_GROQ_MODEL,
             contents=contents
         )
         
@@ -258,7 +258,7 @@ Return only the final answer text.
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model='models/gemini-2.5-flash',
+            model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
         

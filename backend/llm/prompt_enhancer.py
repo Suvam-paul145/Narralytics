@@ -8,19 +8,19 @@ hallucinated column names from ever reaching the SQL generator.
 
 from functools import lru_cache
 
-from google import genai
+from groq import Groq
 
 from config import settings
-from llm.genai_client import generate_with_retry
+from llm.genai_client import generate_with_retry, _GROQ_MODEL
 from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
-def _get_client():
-    """Get the Google GenAI client instance."""
-    if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY is not configured")
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+def _get_client() -> Groq:
+    """Get the Groq client instance."""
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+    return Groq(api_key=settings.GROQ_API_KEY)
 
 
 _SYSTEM_TEMPLATE = """
@@ -71,7 +71,7 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
     """
     # Check quota before making request
     if not quota_manager.is_quota_available():
-        print("⚠️  Gemini API quota exhausted, using fallback prompt enhancement")
+        print("⚠️  Groq API quota exhausted, using fallback prompt enhancement")
         return quota_manager.get_fallback_response(
             "prompt_enhancement", 
             raw_prompt=raw, 
@@ -98,7 +98,7 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
         client = _get_client()
         response = generate_with_retry(
             client=client,
-            model="gemini-2.5-flash",
+            model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
         enhanced = response.text.strip()
