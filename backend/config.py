@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     REDIRECT_URI: str = "http://localhost:8000/auth/callback"
-    OAUTH_STATE_SECRET: str = "dev-state-secret"
+    OAUTH_STATE_SECRET: str | None = None
     FRONTEND_URL: str = "http://localhost:5173"
     FRONTEND_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -61,11 +61,14 @@ class Settings(BaseSettings):
     @field_validator("OAUTH_STATE_SECRET", mode="before")
     @classmethod
     def require_state_secret(cls, value: Any, info: ValidationInfo) -> str:
+        env = str(info.data.get("ENVIRONMENT", "")).lower()
         secret = str(value or "").strip()
+
         if not secret:
+            if env in {"", "development", "dev", "debug"}:
+                return "dev-state-secret"
             raise ValueError("OAUTH_STATE_SECRET must be configured")
 
-        env = str(info.data.get("ENVIRONMENT", "")).lower()
         if secret == "dev-state-secret" and env not in {"", "development", "dev", "debug"}:
             raise ValueError("OAUTH_STATE_SECRET must be set to a secure value outside development")
         return secret

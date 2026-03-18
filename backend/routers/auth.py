@@ -67,7 +67,7 @@ def _resolve_callback_uri(request: Request) -> str:
     try:
         return str(request.url_for("callback"))
     except NoMatchFound:
-        logger.warning("Callback route not found; falling back to configured REDIRECT_URI")
+        logger.error("Callback route not found; falling back to configured REDIRECT_URI")
         return settings.REDIRECT_URI
 
 
@@ -115,14 +115,14 @@ def login(request: Request, redirect: str | None = None):
 
 @router.get("/callback")
 async def callback(request: Request, code: str, state: str | None = None):
-    stage = "state validation"
+    error_stage = "state validation"
     try:
         callback_uri = _resolve_callback_uri(request)
         state_origin = _parse_and_validate_state(request, state)
         frontend_origin = _resolve_frontend_redirect(request, state_origin)
-        stage = "token exchange"
+        error_stage = "token exchange"
         google_user = await exchange_code_for_user(code, redirect_uri=callback_uri)
-        stage = "user creation"
+        error_stage = "user creation"
         await upsert_user(google_user)
         token = create_jwt(
             {
@@ -135,7 +135,7 @@ async def callback(request: Request, code: str, state: str | None = None):
         return RedirectResponse(url=f"{frontend_origin}/auth/callback#token={token}")
     except Exception as exc:
         error_msg = quote(str(exc))
-        logger.exception("OAuth callback failed during %s", stage)
+        logger.exception("OAuth callback failed during %s", error_stage)
         try:
             fallback_frontend = _resolve_frontend_redirect(request, None)
         except HTTPException:
