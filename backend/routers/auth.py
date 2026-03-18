@@ -2,6 +2,7 @@ import hashlib
 import hmac
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from starlette.routing import NoMatchFound
 from urllib.parse import urlparse
 
 from auth.dependencies import get_current_user
@@ -43,7 +44,7 @@ def _allowed_frontend_origins(request: Request | None = None) -> set[str]:
     return allowed
 
 
-def _resolve_frontend_redirect(request: Request, requested: str | None = None, allow_unlisted: bool = False) -> str:
+def _resolve_frontend_redirect(request: Request, requested: str | None = None) -> str:
     allowed = _allowed_frontend_origins(request)
     candidate = (
         _normalize_origin(requested)
@@ -51,7 +52,7 @@ def _resolve_frontend_redirect(request: Request, requested: str | None = None, a
         or _normalize_origin(settings.FRONTEND_URL)
         or _normalize_origin(str(request.base_url))
     )
-    if candidate and (allow_unlisted or not allowed or candidate in allowed):
+    if candidate and candidate in allowed:
         return candidate
     raise HTTPException(status_code=400, detail="Invalid frontend redirect origin")
 
@@ -59,7 +60,7 @@ def _resolve_frontend_redirect(request: Request, requested: str | None = None, a
 def _resolve_callback_uri(request: Request) -> str:
     try:
         return str(request.url_for("callback"))
-    except Exception:
+    except NoMatchFound:
         return settings.REDIRECT_URI
 
 
@@ -75,7 +76,7 @@ def _build_state(frontend_origin: str) -> str:
     return f"{normalized}|{signature}"
 
 
-def _parse_state(state: str | None) -> str | None:
+def _parse_state(request: Request, state: str | None) -> str | None:
     if not state:
         return None
     try:
@@ -89,7 +90,12 @@ def _parse_state(state: str | None) -> str | None:
     ).hexdigest()
     if not hmac.compare_digest(signature, expected):
         raise HTTPException(status_code=400, detail="Invalid state signature")
-    return origin
+    normalized = _normalize_origin(origin)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Invalid redirect origin")
+    if normalized not in _allowed_frontend_origins(request):
+        raise HTTPException(status_code=400, detail="Redirect origin not allowed")
+    return normalized
 
 
 @router.get("/google")
@@ -104,8 +110,8 @@ def login(request: Request, redirect: str | None = None):
 async def callback(request: Request, code: str, state: str | None = None):
     try:
         callback_uri = _resolve_callback_uri(request)
-        state_origin = _parse_state(state)
-        frontend_origin = _resolve_frontend_redirect(request, state_origin, allow_unlisted=True)
+        state_origin = _parse_state(request, state)
+        frontend_origin = _resolve_frontend_redirect(request, state_origin)
         google_user = await exchange_code_for_user(code, redirect_uri=callback_uri)
         await upsert_user(google_user)
         token = create_jwt(
