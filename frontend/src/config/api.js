@@ -8,13 +8,13 @@ const allowedRuntimeOrigins = (import.meta.env.VITE_ALLOWED_API_ORIGINS || "")
 const resolveApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
 
-  const isLocalOrigin =
-    runtimeOrigin?.startsWith("http://localhost") ||
-    runtimeOrigin?.startsWith("http://127.0.0.1") ||
-    runtimeOrigin?.startsWith("https://localhost") ||
-    runtimeOrigin?.startsWith("https://127.0.0.1");
+  const isLocalOrigin = (origin) =>
+    origin?.startsWith("http://localhost") ||
+    origin?.startsWith("http://127.0.0.1") ||
+    origin?.startsWith("https://localhost") ||
+    origin?.startsWith("https://127.0.0.1");
 
-  const isAllowedRuntimeOrigin = runtimeOrigin && (isLocalOrigin || allowedRuntimeOrigins.includes(runtimeOrigin));
+  const isAllowedRuntimeOrigin = runtimeOrigin && (isLocalOrigin(runtimeOrigin) || allowedRuntimeOrigins.includes(runtimeOrigin));
   if (isAllowedRuntimeOrigin) return runtimeOrigin;
 
   return "http://localhost:8000";

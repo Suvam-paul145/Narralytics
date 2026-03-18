@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from starlette.routing import NoMatchFound
@@ -14,6 +15,7 @@ from database.users import upsert_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
+_state_secret_value: bytes | None = None
 
 
 def _normalize_origin(url: str | None) -> str | None:
@@ -44,10 +46,17 @@ def _allowed_frontend_origins(request: Request | None = None) -> set[str]:
 
 
 def _state_secret() -> bytes:
+    global _state_secret_value
+    if _state_secret_value:
+        return _state_secret_value
+
     if settings.OAUTH_STATE_SECRET:
-        return settings.OAUTH_STATE_SECRET.encode("utf-8")
-    logger.warning("OAUTH_STATE_SECRET not set; falling back to JWT_SECRET for OAuth state signing")
-    return settings.JWT_SECRET.encode("utf-8")
+        _state_secret_value = settings.OAUTH_STATE_SECRET.encode("utf-8")
+        return _state_secret_value
+
+    logger.warning("OAUTH_STATE_SECRET not set; generating ephemeral secret for OAuth state signing")
+    _state_secret_value = secrets.token_bytes(32)
+    return _state_secret_value
 
 
 def _resolve_frontend_redirect(request: Request, requested: str | None = None) -> str:
@@ -67,6 +76,7 @@ def _resolve_callback_uri(request: Request) -> str:
     try:
         return str(request.url_for("callback"))
     except NoMatchFound:
+        logger.warning("Callback route not found; falling back to configured REDIRECT_URI")
         return settings.REDIRECT_URI
 
 
@@ -114,6 +124,7 @@ def login(request: Request, redirect: str | None = None):
 
 @router.get("/callback")
 async def callback(request: Request, code: str, state: str | None = None):
+    stage = "initialization"
     try:
         stage = "state validation"
         callback_uri = _resolve_callback_uri(request)
