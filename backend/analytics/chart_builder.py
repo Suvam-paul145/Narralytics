@@ -46,22 +46,22 @@ def generate_sql_from_structured_json(json_spec: dict, schema: dict) -> str:
     if agg not in ["SUM", "COUNT", "AVG", "MIN", "MAX"]:
         agg = "SUM"
 
-    select_clause = f"{x_axis}, ROUND({agg}({y_axis}), 2) AS {y_axis}"
-    group_clause = f"GROUP BY {x_axis}"
+    select_clause = f'"{x_axis}", ROUND({agg}("{y_axis}"), 2) AS "{y_axis}"'
+    group_clause = f'GROUP BY "{x_axis}"'
     
     if group_by and group_by != x_axis:
-        select_clause = f"{x_axis}, {group_by}, ROUND({agg}({y_axis}), 2) AS {y_axis}"
-        group_clause = f"GROUP BY {x_axis}, {group_by}"
+        select_clause = f'"{x_axis}", "{group_by}", ROUND({agg}("{y_axis}"), 2) AS "{y_axis}"'
+        group_clause = f'GROUP BY "{x_axis}", "{group_by}"'
 
     where_clauses = []
     for k, v in filters.items():
         if isinstance(v, str):
-            where_clauses.append(f"{k} = '{v}'")
+            where_clauses.append(f'"{k}" = \'{v}\'')
         else:
-            where_clauses.append(f"{k} = {v}")
+            where_clauses.append(f'"{k}" = {v}')
     
     where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-    order_clause = f"ORDER BY {y_axis} DESC"
+    order_clause = f'ORDER BY "{y_axis}" DESC'
     limit_clause = f"LIMIT {int(limit)}" if limit else "LIMIT 10"
     
     # Pie charts MUST include LIMIT 6
