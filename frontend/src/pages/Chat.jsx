@@ -331,6 +331,8 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [isExporting, setIsExporting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
   const [mounted, setMounted] = useState(false);
   const [greeting, setGreeting] = useState("Good morning");
   const textareaRef = useRef(null);
@@ -434,6 +436,59 @@ export default function Chat() {
       setIsExporting(false);
     }
   };
+
+  // ── Video Export (Screen Record) ─────────────────────────────────────────
+  const handleExportVideo = async () => {
+    if (isRecording) {
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ 
+        video: { displaySurface: "browser" }, 
+        audio: false 
+      });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      const chunks = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Narralytics_Chat_Session_${new Date().toISOString().split('T')[0]}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        setIsRecording(false);
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      
+      // Handle user clicking "Stop sharing" in the browser UI
+      stream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+        setIsRecording(false);
+      };
+    } catch (err) {
+      console.error("Video export error:", err);
+      // User likely cancelled the picker
+    }
+  };
+
 
   // ── Send Query ───────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async (promptOverride) => {
@@ -717,9 +772,40 @@ export default function Chat() {
 
             {/* Dataset chip / upload progress */}
             {(dataset || uploading) && (
-              <div className="chat-meta-row">
-                {uploading && <UploadProgress filename={uploadFilename} progress={uploadProgress} />}
-                {dataset && !uploading && <DatasetChip dataset={dataset} onClear={() => { setDataset(null); setMessages([]); }} />}
+              <div className="chat-meta-row" style={{ justifyContent: "space-between", width: "100%" }}>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {uploading && <UploadProgress filename={uploadFilename} progress={uploadProgress} />}
+                  {dataset && !uploading && <DatasetChip dataset={dataset} onClear={() => { setDataset(null); setMessages([]); }} />}
+                </div>
+                {dataset && (
+                  <button 
+                    onClick={handleExportVideo}
+                    title={isRecording ? "Stop Recording" : "Record Chat to Video"}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 14px",
+                      background: isRecording ? "rgba(239, 68, 68, 0.12)" : "rgba(99, 102, 241, 0.12)",
+                      border: `1px solid ${isRecording ? "rgba(239, 68, 68, 0.3)" : "rgba(99, 102, 241, 0.3)"}`,
+                      borderRadius: "100px",
+                      color: isRecording ? "#ef4444" : "#818cf8",
+                      fontSize: "0.8rem",
+                      cursor: "pointer",
+                      transition: "all 0.2s"
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = isRecording ? "rgba(239, 68, 68, 0.2)" : "rgba(99, 102, 241, 0.2)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = isRecording ? "rgba(239, 68, 68, 0.12)" : "rgba(99, 102, 241, 0.12)"; }}
+                  >
+                    <div style={{
+                      width: "6px", height: "6px", borderRadius: "50%",
+                      background: isRecording ? "#ef4444" : "#6366f1",
+                      boxShadow: isRecording ? "0 0 6px #ef4444" : "0 0 6px #6366f1",
+                      animation: isRecording ? "pulse-border 1.5s infinite" : "none"
+                    }} />
+                    {isRecording ? "Stop Recording" : "Export Video"}
+                  </button>
+                )}
               </div>
             )}
 
