@@ -1,9 +1,19 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from analytics.aggregation_engine import normalize_chart_result
 from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
-from database.history import get_history, save_interaction
+from database.history import (
+    get_chat_session,
+    get_history,
+    list_chat_sessions,
+    save_chat_exchange,
+    save_interaction,
+    upsert_chat_session,
+)
 from llm.chat_engine import get_chat_response, refine_chat_answer
 from llm.decision_engine import get_decision_plan
 from llm.forecast_engine import generate_simple_forecast
@@ -11,6 +21,21 @@ from models.schemas import ChatRequest, ChatResponse, ChartResult, ChartSpec
 from sqlite.executor import execute_query
 
 router = APIRouter(tags=["chat"])
+
+
+class SessionUpsertRequest(BaseModel):
+    session_id: str
+    title: str | None = None
+    dataset_id: str | None = None
+    dataset_name: str | None = None
+
+
+class MessageSaveRequest(BaseModel):
+    session_id: str
+    user_message: dict[str, Any] = Field(default_factory=dict)
+    ai_message: dict[str, Any] = Field(default_factory=dict)
+    dataset_id: str | None = None
+    dataset_name: str | None = None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -139,3 +164,49 @@ async def fetch_history(dataset_id: str, user: dict = Depends(get_current_user))
 
     history_items = await get_history(user["sub"], dataset_id=dataset_id)
     return {"history": history_items}
+
+
+@router.get("/chat/history/sessions")
+async def fetch_chat_sessions(limit: int = 50, user: dict = Depends(get_current_user)):
+    bounded_limit = max(1, min(limit, 100))
+    sessions = await list_chat_sessions(user["sub"], limit=bounded_limit)
+    return {"sessions": sessions}
+
+
+@router.get("/chat/history/session/{session_id}")
+async def fetch_chat_session(session_id: str, user: dict = Depends(get_current_user)):
+    session = await get_chat_session(user["sub"], session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"session": session}
+
+
+@router.post("/chat/history/session")
+async def create_or_update_chat_session(
+    request: SessionUpsertRequest,
+    user: dict = Depends(get_current_user),
+):
+    await upsert_chat_session(
+        user_id=user["sub"],
+        session_id=request.session_id,
+        title=request.title,
+        dataset_id=request.dataset_id,
+        dataset_name=request.dataset_name,
+    )
+    return {"status": "ok"}
+
+
+@router.post("/chat/history/message")
+async def save_chat_message_exchange(
+    request: MessageSaveRequest,
+    user: dict = Depends(get_current_user),
+):
+    await save_chat_exchange(
+        user_id=user["sub"],
+        session_id=request.session_id,
+        user_message=request.user_message,
+        ai_message=request.ai_message,
+        dataset_id=request.dataset_id,
+        dataset_name=request.dataset_name,
+    )
+    return {"status": "ok"}

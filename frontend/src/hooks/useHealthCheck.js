@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_ENDPOINTS } from '../config/api';
 
+const normalizeStatus = (status) => {
+  const value = String(status || '').toLowerCase();
+  if (value === 'limited') return 'degraded';
+  return value || 'unknown';
+};
+
 export const useHealthCheck = (intervalMs = 30000) => {
   const [healthStatus, setHealthStatus] = useState({
     status: 'unknown',
@@ -27,8 +33,17 @@ export const useHealthCheck = (intervalMs = 30000) => {
 
       if (response.ok) {
         const data = await response.json();
-        setHealthStatus({
+        const normalizedData = {
           ...data,
+          status: normalizeStatus(data.status),
+          services: {
+            ...data.services,
+            api: normalizeStatus(data?.services?.api),
+            database: normalizeStatus(data?.services?.database),
+          },
+        };
+        setHealthStatus({
+          ...normalizedData,
           lastChecked: new Date().toISOString(),
           error: null
         });
