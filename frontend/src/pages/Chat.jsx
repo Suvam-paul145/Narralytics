@@ -456,18 +456,8 @@ export default function Chat() {
   const [uploadError, setUploadError] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [pipelineState, setPipelineState] = useState(null);
-
-  // Chat state
-  const [messages, setMessages] = useState([]);
-  const [query, setQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => crypto.randomUUID());
-  const [isExporting, setIsExporting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
-  const [mounted, setMounted] = useState(false);
-  const [greeting, setGreeting] = useState("Good morning");
-  const textareaRef = useRef(null);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -614,7 +604,7 @@ export default function Chat() {
 
   const upsertSessionMeta = useCallback(async ({ sessionId, title, datasetId, datasetName }) => {
     try {
-      await fetch(`${API_BASE}/chat/history/session`, {
+      const response = await fetch(`${API_BASE}/chat/history/session`, {
         method: "POST",
         headers: getAuthHeaders(true),
         body: JSON.stringify({
@@ -625,22 +615,13 @@ export default function Chat() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to generate report");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Narralytics_Report_${dataset.filename.split('.')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
+      if (!response.ok) {
+        throw new Error(`Failed to save session: ${response.status}`);
+      }
     } catch (err) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", alert: `Export failed: ${err.message}` }]);
-    } finally {
-      setIsExporting(false);
+      console.error("Session metadata update failed:", err);
     }
-  };
+  }, []);
 
   // ── Video Export (Screen Record) ─────────────────────────────────────────
   const handleExportVideo = async () => {
@@ -696,19 +677,6 @@ export default function Chat() {
 
 
   // ── Send Query ───────────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async (promptOverride) => {
-    const text = (promptOverride || query).trim();
-    if (!text || isLoading) return;
-
-    if (!dataset) {
-      setMessages((prev) => [...prev, {
-        id: Date.now(), role: "assistant",
-        alert: "Please upload a CSV or Excel file first. Use the 📎 button.",
-      }]);
-      return;
-    }
-  }, []);
-
   const persistExchange = useCallback(
     async ({ sessionId, userMessage, aiMessage, exchangeMeta = {} }) => {
       try {
