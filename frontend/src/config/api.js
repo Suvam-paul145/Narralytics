@@ -1,5 +1,26 @@
 // API configuration — single source of truth for all endpoint URLs
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const runtimeOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
+const allowedRuntimeOrigins = (import.meta.env.VITE_ALLOWED_API_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const resolveApiBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+
+  const isLocalOrigin = (origin) =>
+    origin?.startsWith("http://localhost") ||
+    origin?.startsWith("http://127.0.0.1") ||
+    origin?.startsWith("https://localhost") ||
+    origin?.startsWith("https://127.0.0.1");
+
+  const runtimeOriginIsAllowed = runtimeOrigin && (isLocalOrigin(runtimeOrigin) || allowedRuntimeOrigins.includes(runtimeOrigin));
+  if (runtimeOriginIsAllowed) return runtimeOrigin;
+
+  return "http://localhost:8000";
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export const API_ENDPOINTS = {
   HEALTH: `${API_BASE_URL}/api/health`,
