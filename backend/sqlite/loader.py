@@ -12,9 +12,19 @@ def _clean_column_name(name: str) -> str:
     return cleaned or "column"
 
 
+def generate_column_code(name: str) -> str:
+    """
+    Create a safe column code for storage/querying from a raw column label.
+
+    The code mirrors the normalization used when persisting CSV data into SQLite,
+    ensuring downstream consumers can rely on stable, safe identifiers.
+    """
+    return _clean_column_name(name)
+
+
 def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     normalized = df.copy()
-    normalized.columns = [_clean_column_name(column) for column in normalized.columns]
+    normalized.columns = [generate_column_code(column) for column in normalized.columns]
 
     for column_name in normalized.columns:
         series = normalized[column_name]

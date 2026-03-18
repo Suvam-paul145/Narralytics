@@ -56,6 +56,52 @@ jobs:
       - name: Run backend tests
         run: pytest tests/test_config.py tests/test_health_endpoint.py -q
 
+  data-workflow-profile:
+    name: Data Workflow • Quality & CSV Pipeline
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GOOGLE_CLIENT_ID: ci-client-id
+      GOOGLE_CLIENT_SECRET: ci-client-secret
+      REDIRECT_URI: http://localhost:8000/auth/callback
+      FRONTEND_URL: http://localhost:5173
+      MONGODB_URI: mongodb://localhost:27017
+      MONGODB_DB: narralytics
+      UPLOAD_DIR: ./uploads
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Prepare CI secrets
+        env:
+          JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.CI_GEMINI_API_KEY }}
+        run: |
+          SCRIPT_PATH="${GITHUB_WORKSPACE:-.}/.github/scripts/generate_ci_secrets.py"
+          if [ ! -f "$SCRIPT_PATH" ]; then
+            echo "CI secret generator missing at $SCRIPT_PATH"
+            exit 1
+          fi
+          python "$SCRIPT_PATH" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Validate CSV pipeline and column codes
+        run: pytest tests/test_csv_workflow_profile.py -q
+
   backend-security:
     name: Backend • Security Scans
     runs-on: ubuntu-latest

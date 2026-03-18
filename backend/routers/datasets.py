@@ -81,9 +81,13 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
         "row_count": schema["row_count"],
         "column_count": len(schema["columns"]),
         "columns": schema["columns"],
+        "column_codes": schema["column_codes"],
         "date_columns": schema["date_columns"],
+        "date_column_codes": schema["date_column_codes"],
         "numeric_columns": schema["numeric_columns"],
+        "numeric_column_codes": schema["numeric_column_codes"],
         "categorical_columns": schema["categorical_columns"],
+        "categorical_column_codes": schema["categorical_column_codes"],
         "db_path": db_path,
         "source_file_path": source_file_path,
         "file_size_bytes": len(content),
@@ -96,6 +100,7 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
             "name": file.filename,
             "row_count": schema["row_count"],
             "columns": [column["name"] for column in schema["columns"]],
+            "column_codes": schema["column_codes"],
             "db_path": db_path,
         },
     )
@@ -105,8 +110,11 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
         "filename": file.filename,
         "row_count": schema["row_count"],
         "columns": [column["name"] for column in schema["columns"]],
+        "column_codes": schema["column_codes"],
         "date_columns": schema["date_columns"],
+        "date_column_codes": schema["date_column_codes"],
         "numeric_columns": schema["numeric_columns"],
+        "numeric_column_codes": schema["numeric_column_codes"],
         "message": "Dataset ready. Generating dashboard...",
     }
 
