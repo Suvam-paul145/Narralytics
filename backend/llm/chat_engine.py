@@ -24,18 +24,19 @@ class JSONParsingError(ChatEngineError):
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Groq:
+def _get_client() -> Optional[Groq]:
     """Get the Groq client instance.
-    
-    Returns:
-        Groq: Configured Groq client
-        
-    Raises:
-        RuntimeError: If GROQ_API_KEY is not configured
+
+    Returns None when the key is missing so callers can degrade gracefully.
     """
     if not settings.GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-    return Groq(api_key=settings.GROQ_API_KEY)
+        logger.info("Groq API key not configured; skipping chat LLM client init")
+        return None
+    try:
+        return Groq(api_key=settings.GROQ_API_KEY)
+    except Exception as exc:
+        logger.error(f"Failed to initialize Groq client: {exc}")
+        return None
 
 
 def _parse_json_payload(raw: str) -> Dict:
@@ -193,6 +194,10 @@ def get_chat_response(
         })
 
         client = _get_client()
+        if client is None:
+            logger.info("Skipping chat LLM call because Groq client is unavailable")
+            raise ChatEngineError("llm_unavailable")
+
         response = generate_with_retry(
             client=client,
             model=_GROQ_MODEL,
@@ -286,6 +291,10 @@ Return only the final answer text.
     
     try:
         client = _get_client()
+        if client is None:
+            logger.info("Skipping answer refinement because Groq client is unavailable")
+            return draft_answer
+
         response = generate_with_retry(
             client=client,
             model=_GROQ_MODEL,

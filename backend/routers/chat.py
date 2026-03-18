@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -82,18 +83,22 @@ async def business_chat(request: ChatRequest, user: dict = Depends(get_current_u
         try:
             data_used = execute_query(dataset["db_path"], supporting_sql)
             if data_used:
-                answer = refine_chat_answer(
-                    dataset["original_filename"],
-                    request.message,
-                    answer,
-                    data_used,
-                )
-
-                decision = get_decision_plan(
-                    message=request.message,
-                    schema=schema,
-                    rows=data_used,
-                    supporting_sql=supporting_sql,
+                # Run both LLM calls in parallel — they are independent
+                answer, decision = await asyncio.gather(
+                    asyncio.to_thread(
+                        refine_chat_answer,
+                        dataset["original_filename"],
+                        request.message,
+                        answer,
+                        data_used,
+                    ),
+                    asyncio.to_thread(
+                        get_decision_plan,
+                        message=request.message,
+                        schema=schema,
+                        rows=data_used,
+                        supporting_sql=supporting_sql,
+                    ),
                 )
                 raw_spec = {
                     "label": "Chat Option",

@@ -1,6 +1,8 @@
 import json
 import logging
-from typing import Any
+from typing import Any, Dict
+
+from sqlite.loader import generate_column_code
 
 logger = logging.getLogger(__name__)
 
@@ -25,23 +27,52 @@ def build_fallback_chart(schema: dict) -> dict:
         "aggregation": "sum",
         "groupBy": None,
         "filters": {},
-        "limit": 10
+        "limit": 10,
     }
 
+
+def _normalize_identifier(value: str | None, schema: Dict[str, Any]) -> str | None:
+    """Map a raw column label from the LLM to the normalized SQLite column code.
+
+    The SQLite loader normalizes column labels using ``generate_column_code``. When
+    the LLM returns friendly names, we need to translate them back to the stored
+    codes so SQL doesn't fail with "no such column" or token errors.
+    """
+
+    if not value:
+        return None
+
+    normalized_value = generate_column_code(str(value)).lower()
+    for col in schema.get("columns", []):
+        code = str(col.get("code") or col.get("name") or "").strip()
+        if not code:
+            continue
+
+        # Compare against both raw code and normalized form.
+        if normalized_value == generate_column_code(code).lower():
+            return col.get("code") or code
+
+        name = str(col.get("name") or "").strip()
+        if name and normalized_value == generate_column_code(name).lower():
+            return col.get("code") or name
+
+    # Fallback to sanitized value so at least it is a safe identifier.
+    return normalized_value or value
+
 def generate_sql_from_structured_json(json_spec: dict, schema: dict) -> str:
-    """Generate SQL from structured JSON."""
-    x_axis = json_spec.get("xAxis")
-    y_axis = json_spec.get("yAxis")
-    agg = json_spec.get("aggregation", "sum").upper()
-    group_by = json_spec.get("groupBy")
+    """Generate SQL from structured JSON, normalizing identifiers to SQLite codes."""
+    x_axis = _normalize_identifier(json_spec.get("xAxis"), schema)
+    y_axis = _normalize_identifier(json_spec.get("yAxis"), schema)
+    agg = str(json_spec.get("aggregation", "sum")).upper()
+    group_by = _normalize_identifier(json_spec.get("groupBy"), schema)
     filters = json_spec.get("filters", {})
     limit = json_spec.get("limit", 10)
 
     # Basic safety fallbacks
     if not x_axis or not y_axis:
         fb = build_fallback_chart(schema)
-        x_axis = fb["xAxis"]
-        y_axis = fb["yAxis"]
+        x_axis = _normalize_identifier(fb["xAxis"], schema)
+        y_axis = _normalize_identifier(fb["yAxis"], schema)
 
     if agg not in ["SUM", "COUNT", "AVG", "MIN", "MAX"]:
         agg = "SUM"
@@ -55,10 +86,11 @@ def generate_sql_from_structured_json(json_spec: dict, schema: dict) -> str:
 
     where_clauses = []
     for k, v in filters.items():
+        safe_key = _normalize_identifier(k, schema) or generate_column_code(str(k))
         if isinstance(v, str):
-            where_clauses.append(f'"{k}" = \'{v}\'')
+            where_clauses.append(f'"{safe_key}" = "{v}"')
         else:
-            where_clauses.append(f'"{k}" = {v}')
+            where_clauses.append(f'"{safe_key}" = {v}')
     
     where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
     order_clause = f'ORDER BY "{y_axis}" DESC'
@@ -77,9 +109,12 @@ def convert_llm_json_to_chart_spec(options: list[dict], schema: dict) -> list[di
         results = []
         for opt in options:
             chart_type = opt.get("chartType") or opt.get("chart_type") or "bar"
-            x_axis = opt.get("xAxis") or opt.get("x_key")
-            y_axis = opt.get("yAxis") or opt.get("y_key")
-            group_by = opt.get("groupBy") or opt.get("group_by") or opt.get("color_by")
+            x_axis = _normalize_identifier(opt.get("xAxis") or opt.get("x_key"), schema)
+            y_axis = _normalize_identifier(opt.get("yAxis") or opt.get("y_key"), schema)
+            group_by = _normalize_identifier(
+                opt.get("groupBy") or opt.get("group_by") or opt.get("color_by"),
+                schema,
+            )
             
             # If invalid output, trigger fallback
             if not x_axis or not y_axis:

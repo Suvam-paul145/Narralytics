@@ -24,7 +24,7 @@ import { detectQueryPattern, isDatasetRelevantToQuery, matchQuery } from "../uti
 
 const API_BASE = API_BASE_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
 const SUPPORTED_CHARTS = new Set(["bar", "line", "pie", "scatter", "area"]);
-const PIPELINE_DURATION_MS = 5000;
+const PIPELINE_DURATION_MS = 2000;
 const PIPELINE_TRACKS = [
   { id: "preprocess", label: "Pre-processing Data", start: 0.0, end: 0.62, color: "#38bdf8" },
   { id: "reasoning", label: "Reasoning Engine", start: 0.08, end: 0.86, color: "#5b6af9" },
@@ -35,14 +35,14 @@ const PIPELINE_TRACKS = [
 ];
 
 const SUGGESTION_CHIPS = [
-  "Revenue by category and product",
-  "Regional geography performance",
-  "Monthly time-series trend",
-  "Weekly sessions by days",
-  "Discount strategy impact",
-  "Top best performing products",
+  "Top products by revenue",
+  "Revenue by category",
+  "Regional revenue share",
+  "Monthly revenue trend",
+  "Discount strategy impact by category",
   "Payment method contribution",
-  "Customer rating and satisfaction",
+  "Customer ratings and reviews",
+  "Day-wise sessions and bounce",
 ];
 
 const nowIso = () => new Date().toISOString();
@@ -57,7 +57,7 @@ const getAuthHeaders = (json = false) => {
   return headers;
 };
 
-const fetchJsonWithTimeout = async (url, options = {}, timeoutMs = 4500) => {
+const fetchJsonWithTimeout = async (url, options = {}, timeoutMs = 30000) => {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -456,18 +456,14 @@ export default function Chat() {
   const [uploadError, setUploadError] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [pipelineState, setPipelineState] = useState(null);
-
-  // Chat state
-  const [messages, setMessages] = useState([]);
-  const [query, setQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => crypto.randomUUID());
   const [isExporting, setIsExporting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const [mounted, setMounted] = useState(false);
   const [greeting, setGreeting] = useState("Good morning");
   const textareaRef = useRef(null);
+
+  const hasMessages = messages.length > 0;
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -614,7 +610,7 @@ export default function Chat() {
 
   const upsertSessionMeta = useCallback(async ({ sessionId, title, datasetId, datasetName }) => {
     try {
-      await fetch(`${API_BASE}/chat/history/session`, {
+      const response = await fetch(`${API_BASE}/chat/history/session`, {
         method: "POST",
         headers: getAuthHeaders(true),
         body: JSON.stringify({
@@ -624,23 +620,12 @@ export default function Chat() {
           dataset_name: datasetName || null,
         }),
       });
-
-      if (!response.ok) throw new Error("Failed to generate report");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Narralytics_Report_${dataset.filename.split('.')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
+      
+      if (!response.ok) throw new Error("Failed to update session metadata");
     } catch (err) {
-      setMessages(prev => [...prev, { id: Date.now(), role: "assistant", alert: `Export failed: ${err.message}` }]);
-    } finally {
-      setIsExporting(false);
+      console.error("Failed to upsert session meta:", err);
     }
-  };
+  }, []);
 
   // ── Video Export (Screen Record) ─────────────────────────────────────────
   const handleExportVideo = async () => {
@@ -694,20 +679,6 @@ export default function Chat() {
     }
   };
 
-
-  // ── Send Query ───────────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async (promptOverride) => {
-    const text = (promptOverride || query).trim();
-    if (!text || isLoading) return;
-
-    if (!dataset) {
-      setMessages((prev) => [...prev, {
-        id: Date.now(), role: "assistant",
-        alert: "Please upload a CSV or Excel file first. Use the 📎 button.",
-      }]);
-      return;
-    }
-  }, []);
 
   const persistExchange = useCallback(
     async ({ sessionId, userMessage, aiMessage, exchangeMeta = {} }) => {
@@ -817,10 +788,19 @@ export default function Chat() {
       const pattern = detectQueryPattern(text);
 
       const complete = async (aiMessage, exchangeMeta = {}) => {
-        await pipelinePromise;
+        // Show response immediately — don't block on animation
         setMessages((previous) => [...previous, aiMessage]);
         setIsLoading(false);
         setPipelineState(null);
+        // Cancel any remaining animation timers
+        if (pipelineIntervalRef.current) {
+          clearInterval(pipelineIntervalRef.current);
+          pipelineIntervalRef.current = null;
+        }
+        if (pipelineTimeoutRef.current) {
+          clearTimeout(pipelineTimeoutRef.current);
+          pipelineTimeoutRef.current = null;
+        }
         void persistExchange({ sessionId, userMessage, aiMessage, exchangeMeta });
       };
 
@@ -837,7 +817,9 @@ export default function Chat() {
         const matched = matchQuery(text);
 
         if (matched) {
-          const datasetColumns = Array.isArray(dataset?.columns) ? dataset.columns : [];
+          const datasetColumns = Array.isArray(dataset?.columns)
+            ? dataset.columns.map((col) => (typeof col === "string" ? col : col?.name || col?.code || ""))
+            : [];
           const hasDataset = Boolean(dataset?.dataset_id);
           const hasDatasetColumns = datasetColumns.length > 0;
 
@@ -878,7 +860,6 @@ export default function Chat() {
                     session_id: sessionId,
                   }),
                 },
-                4200,
               );
 
               if (chatPayload?.cannot_answer) {
@@ -937,7 +918,6 @@ export default function Chat() {
                 session_id: sessionId,
               }),
             },
-            4200,
           ),
           fetchJsonWithTimeout(
             `${API_BASE}/query`,
@@ -952,7 +932,6 @@ export default function Chat() {
                 session_id: sessionId,
               }),
             },
-            4200,
           ),
         ]);
 
@@ -1319,13 +1298,91 @@ export default function Chat() {
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
+          </div>
 
+          <div style={{ padding: "10px 20px 20px", display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border)", background: "var(--bg)", zIndex: 10 }}>
             {/* Dataset chip / upload progress */}
             {(dataset || uploading) && (
               <div className="chat-meta-row" style={{ justifyContent: "space-between", width: "100%" }}>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  {uploading && <UploadProgress filename={uploadFilename} progress={uploadProgress} />}
-                  {dataset && !uploading && <DatasetChip dataset={dataset} onClear={() => { setDataset(null); setMessages([]); }} />}
+                  {uploading && (
+                    <div
+                      style={{
+                        borderRadius: 999,
+                        border: "1px solid var(--border)",
+                        background: "var(--bg-card)",
+                        padding: "6px 11px",
+                        fontSize: "0.73rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      <span>{uploadProgress}%</span>
+                      <strong
+                        style={{
+                          color: "var(--text)",
+                          maxWidth: 220,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {uploadFilename}
+                      </strong>
+                    </div>
+                  )}
+                  {dataset && !uploading && (
+                    <div
+                      style={{
+                        borderRadius: 999,
+                        border: "1px solid var(--border)",
+                        background: "var(--bg-card)",
+                        padding: "6px 11px",
+                        fontSize: "0.73rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      <span>Dataset</span>
+                      <strong
+                        style={{
+                          color: "var(--text)",
+                          maxWidth: 220,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {dataset.filename || "Attached Dataset"}
+                      </strong>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDataset(null);
+                          setMessages([]);
+                        }}
+                        title="Clear dataset"
+                        style={{
+                          border: "1px solid var(--border)",
+                          background: "transparent",
+                          color: "var(--text-muted)",
+                          borderRadius: 999,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                          fontSize: "0.65rem",
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {dataset && (
                   <button 

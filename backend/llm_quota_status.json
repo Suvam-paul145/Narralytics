@@ -1,7 +1,7 @@
 {
-  "daily_requests": 51,
+  "daily_requests": 61,
   "last_reset": "2026-03-18T04:48:00.272811",
-  "quota_exhausted_until": null,
+  "quota_exhausted_until": "2026-03-18T16:33:05.832861",
   "daily_limit": 0,
   "api_key_fingerprint": "1c967e15d4fb"
 }

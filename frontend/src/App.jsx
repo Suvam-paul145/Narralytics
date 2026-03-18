@@ -8,7 +8,7 @@ const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Chat = lazy(() => import("./pages/Chat"));
-const Reports = lazy(() => import("./pages/Reports"));
+
 const SystemStatus = lazy(() => import("./pages/SystemStatus"));
 
 // Protected Route Wrapper
@@ -67,7 +67,7 @@ function App() {
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+
             <Route path="/system-status" element={<ProtectedRoute><SystemStatus /></ProtectedRoute>} />
             {/* Catch-all redirect to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

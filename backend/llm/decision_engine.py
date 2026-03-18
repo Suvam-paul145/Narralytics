@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Any
+from typing import Any, Optional
 
 from groq import Groq
 
@@ -11,10 +11,13 @@ from llm.genai_client import generate_with_retry, _GROQ_MODEL
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Groq:
+def _get_client() -> Optional[Groq]:
     if not settings.GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-    return Groq(api_key=settings.GROQ_API_KEY)
+        return None
+    try:
+        return Groq(api_key=settings.GROQ_API_KEY)
+    except Exception:
+        return None
 
 
 def _extract_json(raw: str) -> dict[str, Any]:
@@ -128,6 +131,9 @@ Return:
 
     try:
         client = _get_client()
+        if client is None:
+            return _heuristic_decision(message, schema, rows, supporting_sql)
+
         response = generate_with_retry(
             client=client,
             model=_GROQ_MODEL,

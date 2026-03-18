@@ -16,9 +16,10 @@ def _generate_guaranteed_fallback(enhanced_prompt: str, schema: dict) -> dict:
     Last resort: Generate at least ONE valid chart without relying on LLM.
     Used when LLM fails, quota exhausted, or data is insufficient.
     """
-    numeric_cols = schema.get("numeric_columns", [])
-    categorical_cols = schema.get("categorical_columns", [])
-    date_cols = schema.get("date_columns", [])
+    # Prefer normalized codes to align with SQLite column names
+    numeric_cols = schema.get("numeric_column_codes") or schema.get("numeric_columns", [])
+    categorical_cols = schema.get("categorical_column_codes") or schema.get("categorical_columns", [])
+    date_cols = schema.get("date_column_codes") or schema.get("date_columns", [])
     
     # If we have numeric + categorical, always generate a bar chart
     if numeric_cols and categorical_cols:

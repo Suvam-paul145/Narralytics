@@ -10,7 +10,7 @@ from database.datasets import get_dataset, touch_dataset
 from database.history import save_interaction
 from llm.chart_engine import generate_data_driven_insight
 from llm.prompt_enhancer import enhance_prompt
-from llm.query_generator import generate_query_spec
+from llm.query_generator import generate_query_spec, _generate_guaranteed_fallback
 from models.schemas import ChartResult, ChartSpec, QueryRequest, QueryResponse
 from sqlite.executor import execute_query
 
@@ -138,6 +138,11 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
         "date_columns": dataset["date_columns"],
         "numeric_columns": dataset["numeric_columns"],
         "categorical_columns": dataset["categorical_columns"],
+        # Normalized codes used by SQLite table
+        "column_codes": dataset.get("column_codes", []),
+        "date_column_codes": dataset.get("date_column_codes", dataset.get("date_columns", [])),
+        "numeric_column_codes": dataset.get("numeric_column_codes", dataset.get("numeric_columns", [])),
+        "categorical_column_codes": dataset.get("categorical_column_codes", dataset.get("categorical_columns", [])),
     }
     history: list[dict[str, str]] = [
         {"role": turn.role, "content": turn.content} for turn in request.history
@@ -207,6 +212,19 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
         history=history,
         output_count=request.output_count,
     )
+
+    # If LLM-derived options all failed, fall back to deterministic charts using schema
+    if not options or all(option.error for option in options):
+        fallback_spec = _generate_guaranteed_fallback(request.prompt, schema)
+        fallback_options = fallback_spec.get("options", []) if isinstance(fallback_spec, dict) else []
+        options = _execute_options_with_retry(
+            raw_options=fallback_options,
+            db_path=dataset["db_path"],
+            prompt=request.prompt,
+            schema=schema,
+            history=history,
+            output_count=request.output_count,
+        )
 
     if not options or all(option.error for option in options):
         return QueryResponse(

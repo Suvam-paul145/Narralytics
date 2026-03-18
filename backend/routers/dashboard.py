@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from analytics.aggregation_engine import normalize_chart_result
@@ -8,6 +10,34 @@ from llm.auto_dashboard import generate_auto_dashboard
 from sqlite.executor import execute_query
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def _execute_chart_sync(spec, dataset, schema):
+    """Execute a single chart spec synchronously (for use with asyncio.to_thread)."""
+    try:
+        raw_data = execute_query(dataset["db_path"], spec["sql"])
+        normalized_spec, data = normalize_chart_result(spec=spec, rows=raw_data, schema=schema)
+        return {
+            "chart_id": normalized_spec.get("chart_id"),
+            "title": normalized_spec["title"],
+            "chart_type": normalized_spec["chart_type"],
+            "x_key": normalized_spec["x_key"],
+            "y_key": normalized_spec["y_key"],
+            "color_by": normalized_spec.get("color_by"),
+            "insight": normalized_spec.get("insight"),
+            "category": normalized_spec.get("category"),
+            "sql": normalized_spec["sql"],
+            "data": data,
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "chart_id": spec.get("chart_id"),
+            "title": spec.get("title", "Chart"),
+            "chart_type": spec.get("chart_type"),
+            "data": [],
+            "error": str(exc),
+        }
 
 
 @router.post("/auto/{dataset_id}")
@@ -25,36 +55,11 @@ async def auto_generate_dashboard(dataset_id: str, user: dict = Depends(get_curr
     }
     chart_specs = generate_auto_dashboard(schema)
 
-    results = []
-    for spec in chart_specs:
-        try:
-            raw_data = execute_query(dataset["db_path"], spec["sql"])
-            normalized_spec, data = normalize_chart_result(spec=spec, rows=raw_data, schema=schema)
-            results.append(
-                {
-                    "chart_id": normalized_spec.get("chart_id"),
-                    "title": normalized_spec["title"],
-                    "chart_type": normalized_spec["chart_type"],
-                    "x_key": normalized_spec["x_key"],
-                    "y_key": normalized_spec["y_key"],
-                    "color_by": normalized_spec.get("color_by"),
-                    "insight": normalized_spec.get("insight"),
-                    "category": normalized_spec.get("category"),
-                    "sql": normalized_spec["sql"],
-                    "data": data,
-                    "error": None,
-                }
-            )
-        except Exception as exc:
-            results.append(
-                {
-                    "chart_id": spec.get("chart_id"),
-                    "title": spec.get("title", "Chart"),
-                    "chart_type": spec.get("chart_type"),
-                    "data": [],
-                    "error": str(exc),
-                }
-            )
+    # Execute all chart SQL queries in parallel instead of sequentially
+    results = await asyncio.gather(
+        *[asyncio.to_thread(_execute_chart_sync, spec, dataset, schema) for spec in chart_specs]
+    )
+    results = list(results)
 
     await touch_dataset(dataset_id)
     await save_interaction(

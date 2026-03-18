@@ -144,7 +144,6 @@ async def save_chat_exchange(
                     "user_id": user_id,
                     "session_id": session_id,
                     "created_at": now,
-                    "message_count": 0,
                 },
                 "$push": {"messages": {"$each": [normalized_user, normalized_ai]}},
                 "$inc": {"message_count": 2},

@@ -804,7 +804,6 @@ function FeaturesSection() {
     { icon: MessageSquare, color: "#2dd4a0", title: "Natural Language Queries", desc: "Ask business questions in plain English. The AI writes SQL, executes it, and returns interactive charts." },
     { icon: Mic,         color: "#ff6b8a", title: "Voice Assistant",       desc: "Speak your queries out loud. Voice input converts to text, same AI pipeline — results read back to you." },
     { icon: TrendingUp,  color: "#a78bfa", title: "Forecasting on Demand", desc: "Explicitly ask for predictions and the system runs statistical extrapolation with confidence intervals." },
-    { icon: FileText,    color: "#f5a623", title: "PDF Reports",           desc: "Export full analytical reports with charts, executive summary, and statistical calculations in one click." },
   ];
 
   return (

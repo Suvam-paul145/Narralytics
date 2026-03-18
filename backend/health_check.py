@@ -119,7 +119,7 @@ class HealthChecker:
             
             # Define critical configuration checks
             config_checks = [
-                (settings.GROQ_API_KEY, "Groq API key", True),
+                (settings.GROQ_API_KEY, "Groq API key", False),
                 (settings.MONGODB_URI, "MongoDB URI", True),
                 (getattr(settings, 'JWT_SECRET', None), "JWT secret", True),
                 (getattr(settings, 'GOOGLE_CLIENT_ID', None), "Google Client ID", False),

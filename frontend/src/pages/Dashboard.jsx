@@ -175,7 +175,6 @@ const activityFeed = [
   {id:1,icon:Sparkles,     color:"#5b6af9",user:"AI Engine",action:"Generated revenue forecast for Q1 2025",      time:"2m ago"},
   {id:2,icon:AlertTriangle,color:"#f5a623",user:"System",   action:"Anomaly: Electronics spike 23% above trend",  time:"8m ago"},
   {id:3,icon:BarChart2,    color:"#2dd4a0",user:"You",      action:"Queried: Monthly revenue by region",          time:"15m ago"},
-  {id:4,icon:FileText,     color:"#38bdf8",user:"System",   action:"Weekly digest report generated",              time:"1h ago"},
   {id:5,icon:MessageSquare,color:"#a78bfa",user:"You",      action:"Chat: Is our discount strategy working?",     time:"2h ago"},
   {id:6,icon:CheckCircle,  color:"#2dd4a0",user:"System",   action:"Data pipeline sync — 50,000 rows complete",   time:"3h ago"},
 ];
@@ -328,14 +327,11 @@ function Sidebar({collapsed,onToggle,activePage,setActivePage}) {
   const navItems = [
     {id:"overview",   icon:LayoutDashboard,label:"Overview"},
     {id:"chat",       icon:MessageSquare,  label:"AI Chat",  badge:2},
-    {id:"reports",    icon:FileText,       label:"Reports"},
   ];
 
   const handleNavClick = (id) => {
     if (id === "chat") {
       navigate("/chat");
-    } else if (id === "reports") {
-      navigate("/reports");
     } else {
       setActivePage(id);
     }
@@ -464,11 +460,10 @@ function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOp
 
   const titles={overview:"Dashboard Overview",analytics:"Analytics",
     datasets:"Datasets",chat:"AI Chat Assistant",insights:"AI Insights",
-    reports:"Reports",alerts:"Alerts",settings:"Settings"};
+    alerts:"Alerts",settings:"Settings"};
   const notifs=[
     {title:"Revenue milestone", desc:"Monthly revenue crossed $100K.",         time:"Just now",read:false},
     {title:"Anomaly detected",  desc:"Electronics spike — 23% above forecast.",time:"8m ago",  read:false},
-    {title:"Report ready",      desc:"Weekly digest is ready to download.",     time:"1h ago",  read:false},
     {title:"Sync complete",     desc:"50,000 rows loaded successfully.",         time:"3h ago",  read:true},
   ];
 
@@ -504,7 +499,7 @@ function TopNav({isDark,onToggle,notifOpen,setNotifOpen,profileOpen,setProfileOp
         onBlurCapture={e=>e.currentTarget.style.borderColor="var(--border)"}>
         <Search size={13} color="var(--text-muted)"/>
         <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Search queries, reports..."
+          placeholder="Search queries..."
           style={{flex:1,background:"transparent",border:"none",outline:"none",
             fontSize:"0.82rem",color:"var(--text)"}}/>
         {search&&<button onClick={()=>setSearch("")}
@@ -1058,7 +1053,6 @@ export default function Dashboard({onNavigateToLanding}) {
     datasets:  <ComingSoon title="Dataset Manager"     icon={Database}/>,
     chat:      <ComingSoon title="AI Chat Assistant"   icon={MessageSquare}/>,
     insights:  <ComingSoon title="AI Insights"         icon={Lightbulb}/>,
-    reports:   <ComingSoon title="PDF Reports"         icon={FileText}/>,
     alerts:    <ComingSoon title="Alerts & Monitoring" icon={Bell}/>,
     settings:  <ComingSoon title="Settings"            icon={Settings}/>,
   };

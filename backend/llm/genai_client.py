@@ -1,7 +1,16 @@
 import re
 import time
+from typing import Any
 
 from llm.quota_manager import quota_manager
+from config import settings
+
+try:
+    import google.generativeai as genai
+    _HAS_GEMINI = True
+except Exception:
+    genai = None  # type: ignore
+    _HAS_GEMINI = False
 
 
 _RETRYABLE_MARKERS = (
@@ -27,6 +36,7 @@ _QUOTA_MARKERS = (
 )
 
 _GROQ_MODEL = "llama-3.3-70b-versatile"
+_GEMINI_MODEL = "gemini-2.0-flash"
 
 
 class _GroqResponseWrapper:
@@ -72,31 +82,58 @@ def _contents_to_messages(contents) -> list[dict]:
     return messages
 
 
-def generate_with_retry(client, model: str, contents, max_attempts: int = 3):
-    """Generate content using the Groq client with retry on transient errors.
+def _contents_to_prompt(contents) -> str:
+    parts: list[str] = []
+    for item in contents:
+        role = item.get("role", "user")
+        text = " ".join(p.get("text", "") for p in item.get("parts", []) if isinstance(p, dict)).strip()
+        if text:
+            parts.append(f"{role}: {text}")
+    return "\n\n".join(parts)
 
-    Maintains the same call signature as the previous genai-based helper so
-    that all engine files work without interface changes. The *model* argument
-    is accepted for API compatibility but is always overridden by the
-    configured Groq model constant ``_GROQ_MODEL``.
-    """
+
+def _call_groq(client, contents):
     messages = _contents_to_messages(contents)
+    response = client.chat.completions.create(
+        model=_GROQ_MODEL,
+        messages=messages,
+    )
+    content = response.choices[0].message.content or ""
+    return _GroqResponseWrapper(content)
+
+
+def _call_gemini(contents):
+    prompt = _contents_to_prompt(contents)
+    model = genai.GenerativeModel(_GEMINI_MODEL)
+    response = model.generate_content(prompt)
+    text = getattr(response, "text", "") or ""  # type: ignore
+    return _GroqResponseWrapper(text)
+
+
+def generate_with_retry(client: Any, model: str, contents, max_attempts: int = 2):
+    """Generate content using Gemini if available, otherwise Groq, otherwise fail/skip."""
+    use_gemini = bool(settings.GEMINI_API_KEY) and _HAS_GEMINI
+    use_groq = client is not None or bool(settings.GROQ_API_KEY)
+
+    if use_gemini and genai:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+
     last_exc: Exception | None = None
 
     for attempt in range(1, max_attempts + 1):
         try:
-            response = client.chat.completions.create(
-                model=_GROQ_MODEL,
-                messages=messages,
-            )
-            content = response.choices[0].message.content or ""
-            return _GroqResponseWrapper(content)
+            if use_gemini and genai:
+                return _call_gemini(contents)
+            if use_groq and client is not None:
+                return _call_groq(client, contents)
+            # Neither provider available
+            raise RuntimeError("No LLM provider configured")
         except Exception as exc:
             last_exc = exc
             should_retry = _is_retryable_error(exc) and attempt < max_attempts
 
             if should_retry:
-                delay = 2 ** (attempt - 1)
+                delay = min(1, 2 ** (attempt - 1))
                 match = re.search(r"retry[-_]after[^\d]*(\d+(?:\.\d+)?)", str(exc), re.I)
                 if match:
                     delay = min(float(match.group(1)), 30)
@@ -107,6 +144,12 @@ def generate_with_retry(client, model: str, contents, max_attempts: int = 3):
                 quota_manager.record_quota_exhausted(
                     retry_delay_seconds=_extract_retry_delay_seconds(exc)
                 )
+            # If Gemini failed and Groq is available, try Groq once before giving up
+            if use_gemini and use_groq and client is not None and not should_retry:
+                try:
+                    return _call_groq(client, contents)
+                except Exception as groq_exc:
+                    last_exc = groq_exc
             raise
 
     if last_exc is not None:
@@ -116,4 +159,4 @@ def generate_with_retry(client, model: str, contents, max_attempts: int = 3):
             )
         raise last_exc
 
-    raise RuntimeError("Groq request failed before any attempt was made.")
+    raise RuntimeError("LLM request failed before any attempt was made.")
