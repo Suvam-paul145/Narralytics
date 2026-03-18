@@ -4,24 +4,14 @@ import json
 from functools import lru_cache
 from typing import Any, Optional
 
-from groq import Groq
-
 from config import settings
 from llm.genai_client import generate_with_retry, _GROQ_MODEL
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Optional[Groq]:
-    """Get the Groq client with API key configuration.
-
-    Returns None when missing so callers can skip gracefully.
-    """
-    if not settings.GROQ_API_KEY:
-        return None
-    try:
-        return Groq(api_key=settings.GROQ_API_KEY)
-    except Exception:
-        return None
+def _get_client() -> Optional[None]:
+    """Gemini-only path keeps compatibility with existing call sites."""
+    return None
 
 
 def _parse_json_payload(raw: str) -> dict[str, Any]:

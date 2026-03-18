@@ -18,17 +18,19 @@ except ImportError:
 
 app = FastAPI(title="Narralytics API", version="2.0.0")
 
-import os
-
 # Build allowed origins from both FRONTEND_URL and FRONTEND_ORIGINS
 _origins = [settings.FRONTEND_URL]
 if settings.FRONTEND_ORIGINS:
     _origins.extend([o.strip() for o in settings.FRONTEND_ORIGINS.split(",") if o.strip()])
 _origins = list(set(_origins))  # deduplicate
+_env = (settings.ENVIRONMENT or "").strip().lower()
+_is_dev_env = _env in {"", "development", "dev", "debug", "local"}
+_local_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$" if _is_dev_env else None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
+    allow_origin_regex=_local_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

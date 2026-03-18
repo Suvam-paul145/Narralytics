@@ -35,14 +35,11 @@ const PIPELINE_TRACKS = [
 ];
 
 const SUGGESTION_CHIPS = [
-  "Top products by revenue",
-  "Revenue by category",
-  "Regional revenue share",
-  "Monthly revenue trend",
-  "Discount strategy impact by category",
-  "Payment method contribution",
-  "Customer ratings and reviews",
-  "Day-wise sessions and bounce",
+  "Show top 5 regions by total revenue",
+  "Top 10 customers and their total revenue",
+  "Top 10 products by quantity sold",
+  "Which product category generates highest revenue?",
+  "Revenue vs discount correlation by category"
 ];
 
 const nowIso = () => new Date().toISOString();
@@ -783,7 +780,7 @@ export default function Chat() {
       setQuery("");
       setIsLoading(true);
       const pipelinePromise = runDummyPipeline();
-      const pattern = detectQueryPattern(text);
+      const pattern = null;
 
       const complete = async (aiMessage, exchangeMeta = {}) => {
         // Show response immediately — don't block on animation
@@ -811,83 +808,10 @@ export default function Chat() {
         });
       }
 
+
+
       try {
-        const matched = matchQuery(text);
 
-        if (matched) {
-          const datasetColumns = Array.isArray(dataset?.columns)
-            ? dataset.columns.map((col) => (typeof col === "string" ? col : col?.name || col?.code || ""))
-            : [];
-          const hasDataset = Boolean(dataset?.dataset_id);
-          const hasDatasetColumns = datasetColumns.length > 0;
-
-          if (hasDataset && hasDatasetColumns && !isDatasetRelevantToQuery(text, datasetColumns)) {
-            const aiMessage = {
-              id: `assistant-${Date.now() + 1}`,
-              role: "assistant",
-              content: INSUFFICIENT_DATA_MESSAGE,
-              charts: [],
-              timestamp: nowIso(),
-              meta: { mode: "insufficient", pattern, reason: "dataset_irrelevant" },
-            };
-            await complete(aiMessage, { pattern, mode: "insufficient", source: "deterministic_guard" });
-            return;
-          }
-
-          let aiMessage = {
-            id: `assistant-${Date.now() + 1}`,
-            role: "assistant",
-            content: matched.answer,
-            charts: [matched],
-            timestamp: nowIso(),
-            meta: { mode: "deterministic", pattern, chart_source: "hardcoded_matcher" },
-          };
-
-          if (hasDataset) {
-            const history = toTurnHistory([...messages, userMessage]);
-            try {
-              const chatPayload = await fetchJsonWithTimeout(
-                `${API_BASE}/chat`,
-                {
-                  method: "POST",
-                  headers: getAuthHeaders(true),
-                  body: JSON.stringify({
-                    message: text,
-                    dataset_id: dataset.dataset_id,
-                    history,
-                    session_id: sessionId,
-                  }),
-                },
-              );
-
-              if (chatPayload?.cannot_answer) {
-                aiMessage = {
-                  id: `assistant-${Date.now() + 1}`,
-                  role: "assistant",
-                  content: INSUFFICIENT_DATA_MESSAGE,
-                  charts: [],
-                  timestamp: nowIso(),
-                  meta: { mode: "insufficient", pattern, reason: "backend_cannot_answer" },
-                };
-              } else if (chatPayload?.answer) {
-                aiMessage = {
-                  ...aiMessage,
-                  content: chatPayload.answer,
-                  meta: { ...aiMessage.meta, mode: "hybrid", description_source: "backend_llm" },
-                };
-              }
-            } catch {
-              // Keep deterministic chart + answer as fallback.
-            }
-          }
-
-          await complete(aiMessage, {
-            pattern,
-            mode: aiMessage?.meta?.mode || "deterministic",
-            source: "matcher",
-          });
-          return;
-        }
 
         if (!dataset?.dataset_id) {
           const aiMessage = {
@@ -1454,7 +1378,7 @@ export default function Chat() {
             >
               <textarea
                 style={{ width: "100%", minHeight: 62, maxHeight: 180, padding: "13px 14px 9px", border: "none", resize: "vertical", background: "transparent", outline: "none", color: "var(--text)", fontSize: "0.95rem", lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif" }}
-                placeholder="Ask for revenue, region, trend, sessions, discount strategy, payment method, or rating insights..."
+                placeholder="Ask about your data..."
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {

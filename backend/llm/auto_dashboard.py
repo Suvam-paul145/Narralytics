@@ -3,10 +3,8 @@ import logging
 from functools import lru_cache
 from typing import Dict, List, Optional, Any
 
-from groq import Groq
-
 from config import settings
-from llm.genai_client import generate_with_retry, _GROQ_MODEL
+from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
@@ -33,21 +31,9 @@ DTYPE_CATEGORICAL = "categorical"
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Optional[Groq]:
-    """Get the Groq client with API key configuration.
-
-    Returns None when the key is missing so callers can gracefully skip
-    auto-dashboard generation instead of crashing.
-    """
-    if not settings.GROQ_API_KEY:
-        logger.info("Groq API key not configured; skipping auto-dashboard client init")
-        return None
-
-    try:
-        return Groq(api_key=settings.GROQ_API_KEY)
-    except Exception as e:
-        logger.error(f"Failed to initialize Groq client: {e}")
-        return None
+def _get_client() -> None:
+    """Gemini-only path keeps compatibility with existing call sites."""
+    return None
 
 
 def _parse_json_payload(raw: str) -> Dict[str, Any]:
@@ -305,22 +291,20 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         logger.error(f"Invalid schema: {e}")
         return []
 
-    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+    primary_key = get_primary_api_key()
+    if not quota_manager.is_quota_available(primary_key):
         logger.info("Using fallback dashboard generation due to active local backoff")
         return quota_manager.get_fallback_response("auto_dashboard", schema=schema)
     
     try:
         client = _get_client()
-        if client is None:
-            logger.info("Skipping auto-dashboard generation because Groq client is unavailable")
-            return []
 
         response = generate_with_retry(
             client=client,
             model=DEFAULT_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
-        quota_manager.record_request(settings.GROQ_API_KEY)
+        quota_manager.record_request(primary_key)
         
         if not response or not response.text:
             logger.error("Empty response from GenAI model")

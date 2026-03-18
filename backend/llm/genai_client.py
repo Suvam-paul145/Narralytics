@@ -1,12 +1,15 @@
 import re
 import time
+from itertools import cycle
+from threading import Lock
 from typing import Any
 
-from llm.quota_manager import quota_manager
 from config import settings
+from llm.quota_manager import quota_manager
 
 try:
-    import google.generativeai as genai
+    from google import genai
+
     _HAS_GEMINI = True
 except Exception:
     genai = None  # type: ignore
@@ -35,12 +38,12 @@ _QUOTA_MARKERS = (
     "resource exhausted",
 )
 
-_GROQ_MODEL = "llama-3.3-70b-versatile"
 _GEMINI_MODEL = "gemini-2.0-flash"
+_GROQ_MODEL = _GEMINI_MODEL  # Backward-compat constant name used across the codebase.
 
 
-class _GroqResponseWrapper:
-    """Thin wrapper so callers can use response.text like they did with genai."""
+class _TextResponse:
+    """Thin wrapper so callers can keep using response.text."""
 
     def __init__(self, content: str) -> None:
         self.text = content
@@ -63,25 +66,6 @@ def _extract_retry_delay_seconds(exc: Exception) -> int:
     return max(1, min(int(float(match.group(1))), 3600))
 
 
-def _contents_to_messages(contents) -> list[dict]:
-    """Convert genai-style contents to OpenAI/Groq messages format.
-
-    genai format:  [{"role": "user",  "parts": [{"text": "..."}]}]
-    groq format:   [{"role": "user",  "content": "..."}]
-
-    The genai role "model" maps to "assistant" in Groq.
-    """
-    messages = []
-    for item in contents:
-        role = item.get("role", "user")
-        if role == "model":
-            role = "assistant"
-        parts = item.get("parts", [])
-        text = " ".join(p.get("text", "") for p in parts if isinstance(p, dict))
-        messages.append({"role": role, "content": text})
-    return messages
-
-
 def _contents_to_prompt(contents) -> str:
     parts: list[str] = []
     for item in contents:
@@ -92,71 +76,96 @@ def _contents_to_prompt(contents) -> str:
     return "\n\n".join(parts)
 
 
-def _call_groq(client, contents):
-    messages = _contents_to_messages(contents)
-    response = client.chat.completions.create(
-        model=_GROQ_MODEL,
-        messages=messages,
-    )
-    content = response.choices[0].message.content or ""
-    return _GroqResponseWrapper(content)
+_key_cycle_lock = Lock()
+_key_cycle: Any = None
 
 
-def _call_gemini(contents):
+def get_gemini_api_keys() -> list[str]:
+    return settings.gemini_api_keys
+
+
+def get_primary_api_key() -> str:
+    keys = get_gemini_api_keys()
+    return keys[0] if keys else ""
+
+
+def _next_gemini_key() -> str:
+    global _key_cycle
+    keys = get_gemini_api_keys()
+    if not keys:
+        return ""
+
+    with _key_cycle_lock:
+        if _key_cycle is None:
+            _key_cycle = cycle(keys)
+        return next(_key_cycle)
+
+
+def _extract_text_from_response(response: Any) -> str:
+    # google.genai usually exposes .text; keep robust fallbacks.
+    text = getattr(response, "text", None)
+    if text:
+        return str(text)
+
+    candidates = getattr(response, "candidates", None)
+    if candidates:
+        try:
+            parts = candidates[0].content.parts
+            return " ".join(str(getattr(p, "text", "")) for p in parts).strip()
+        except Exception:
+            return ""
+
+    return ""
+
+
+def _call_gemini(contents, api_key: str):
     prompt = _contents_to_prompt(contents)
-    model = genai.GenerativeModel(_GEMINI_MODEL)
-    response = model.generate_content(prompt)
-    text = getattr(response, "text", "") or ""  # type: ignore
-    return _GroqResponseWrapper(text)
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(model=_GEMINI_MODEL, contents=prompt)
+    text = _extract_text_from_response(response)
+    return _TextResponse(text)
 
 
 def generate_with_retry(client: Any, model: str, contents, max_attempts: int = 2):
-    """Generate content using Gemini if available, otherwise Groq, otherwise fail/skip."""
-    use_gemini = bool(settings.GEMINI_API_KEY) and _HAS_GEMINI
-    use_groq = client is not None or bool(settings.GROQ_API_KEY)
+    """Gemini-only generation with API-key rotation.
 
-    if use_gemini and genai:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+    Signature keeps ``client`` and ``model`` for backwards compatibility.
+    """
+    del client, model
+
+    if not _HAS_GEMINI:
+        raise RuntimeError("google-genai package is not installed")
+
+    keys = get_gemini_api_keys()
+    if not keys:
+        raise RuntimeError("No Gemini API key configured (set GEMINI_API_KEY_1..3)")
 
     last_exc: Exception | None = None
 
-    for attempt in range(1, max_attempts + 1):
+    attempts = max(1, max_attempts) * len(keys)
+    for _ in range(attempts):
+        api_key = _next_gemini_key()
+        if not api_key:
+            break
+
         try:
-            if use_gemini and genai:
-                return _call_gemini(contents)
-            if use_groq and client is not None:
-                return _call_groq(client, contents)
-            # Neither provider available
-            raise RuntimeError("No LLM provider configured")
+            return _call_gemini(contents, api_key=api_key)
         except Exception as exc:
             last_exc = exc
-            should_retry = _is_retryable_error(exc) and attempt < max_attempts
 
-            if should_retry:
-                delay = min(1, 2 ** (attempt - 1))
-                match = re.search(r"retry[-_]after[^\d]*(\d+(?:\.\d+)?)", str(exc), re.I)
-                if match:
-                    delay = min(float(match.group(1)), 30)
-                time.sleep(delay)
+            if _is_quota_error(exc) or _is_retryable_error(exc):
+                # Try next key quickly.
                 continue
 
-            if _is_quota_error(exc):
-                quota_manager.record_quota_exhausted(
-                    retry_delay_seconds=_extract_retry_delay_seconds(exc)
-                )
-            # If Gemini failed and Groq is available, try Groq once before giving up
-            if use_gemini and use_groq and client is not None and not should_retry:
-                try:
-                    return _call_groq(client, contents)
-                except Exception as groq_exc:
-                    last_exc = groq_exc
+            # Non-quota functional errors should bubble immediately.
             raise
 
     if last_exc is not None:
-        if _is_quota_error(last_exc):
+        if _is_quota_error(last_exc) or _is_retryable_error(last_exc):
             quota_manager.record_quota_exhausted(
-                retry_delay_seconds=_extract_retry_delay_seconds(last_exc)
+                retry_delay_seconds=_extract_retry_delay_seconds(last_exc),
+                api_key=get_primary_api_key(),
             )
         raise last_exc
 
-    raise RuntimeError("LLM request failed before any attempt was made.")
+    raise RuntimeError("Gemini request failed before any attempt was made.")

@@ -14,7 +14,12 @@ const resolveApiBaseUrl = () => {
     origin?.startsWith("https://localhost") ||
     origin?.startsWith("https://127.0.0.1");
 
-  const runtimeOriginIsAllowed = runtimeOrigin && (isLocalOrigin(runtimeOrigin) || allowedRuntimeOrigins.includes(runtimeOrigin));
+  // Local dev should target backend directly unless explicitly overridden.
+  if (runtimeOrigin && isLocalOrigin(runtimeOrigin)) {
+    return "http://localhost:8000";
+  }
+
+  const runtimeOriginIsAllowed = runtimeOrigin && allowedRuntimeOrigins.includes(runtimeOrigin);
   if (runtimeOriginIsAllowed) return runtimeOrigin;
 
   return "http://localhost:8000";
@@ -24,6 +29,7 @@ const API_BASE_URL = resolveApiBaseUrl();
 
 export const API_ENDPOINTS = {
   HEALTH: `${API_BASE_URL}/api/health`,
+  BASIC_HEALTH: `${API_BASE_URL}/health`,
   AUTH: `${API_BASE_URL}/auth`,
   DATASETS: `${API_BASE_URL}/datasets`,
   DASHBOARD: `${API_BASE_URL}/dashboard`,

@@ -2,10 +2,8 @@ import json
 import logging
 from functools import lru_cache
 
-from groq import Groq
-
 from config import settings
-from llm.genai_client import _GROQ_MODEL, generate_with_retry
+from llm.genai_client import _GROQ_MODEL, generate_with_retry, get_primary_api_key
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
@@ -86,10 +84,9 @@ def _generate_guaranteed_fallback(enhanced_prompt: str, schema: dict) -> dict:
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Groq:
-    if not settings.GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-    return Groq(api_key=settings.GROQ_API_KEY)
+def _get_client():
+    # Backwards compatibility: generate_with_retry is Gemini-only now.
+    return None
 
 
 def _clean_json(raw: str) -> str:
@@ -158,6 +155,16 @@ def _parse_payload(raw: str) -> dict:
     if not isinstance(payload, dict):
         raise ValueError("Model response is not a JSON object")
 
+    # Accept user-prompt format alias: {"charts": [...]} and normalize to options.
+    if "options" not in payload and isinstance(payload.get("charts"), list):
+        payload["options"] = payload.get("charts")
+
+    if payload.get("error"):
+        return {
+            "cannot_answer": True,
+            "reason": str(payload.get("error")),
+        }
+
     options = payload.get("options")
     if options is not None and not isinstance(options, list):
         raise ValueError("Model response 'options' must be a list")
@@ -165,9 +172,8 @@ def _parse_payload(raw: str) -> dict:
     return payload
 
 
-_SYSTEM_TEMPLATE = """You are a strict analytics engine for Narralytics.
-You receive an analytical instruction and must extract the logic into a highly structured MANDATORY JSON format.
-Absolutely NO free text. No markdown. ONLY JSON.
+_SYSTEM_TEMPLATE = """Act as an expert business intelligence engine trained on an e-commerce dataset.
+Convert ANY natural language query into STRICT structured JSON for analytics.
 
 === DATASET SCHEMA ===
 {schema_text}
@@ -175,31 +181,42 @@ Absolutely NO free text. No markdown. ONLY JSON.
 === VALID COLUMNS ===
 {columns_csv}
 
+=== REQUIRED INTENT HANDLING ===
+- Detect ranking intent: top, best, highest, leading, most, compare.
+- Detect entity dimension from schema (e.g., customer_region, product_category, product_id, payment_method).
+- Detect metric from schema (prefer total_revenue, quantity_sold, rating, review_count, discounted_price when present).
+- Apply aggregation + sorting for ranking/comparison.
+
 === RULES ===
-- NEVER invent column names. ONLY use valid columns.
-- Ensure correct aggregation based on intent (SUM, AVG, COUNT, MIN, MAX).
-- By default use grouping if comparing categories.
-- For pie charts MUST use limit=6.
-- chartType must be one of: bar, line, pie, area, scatter
+1) NEVER hallucinate columns outside the schema.
+2) If query implies time, use chartType=line when date columns exist.
+3) If query implies ranking/comparison, use chartType=bar.
+4) If query implies distribution/share, use chartType=pie.
+5) If metric is not explicit, default to total_revenue when available, else first numeric column.
+6) If entity is not explicit, infer the best categorical/date column.
+7) Ranking queries MUST include sort="desc" and a numeric limit.
+8) Only output JSON; no prose.
 
 === MANDATORY JSON OUTPUT ===
 {{
-  "options": [
-    {{
-      "chartType": "bar",
-      "xAxis": "column_name",
-      "yAxis": "column_name",
-      "aggregation": "SUM",
-      "groupBy": "column_name",
-      "filters": {{
-        "Region": "West"
-      }},
-      "limit": 10,
-      "title": "Analysis Title",
-      "insight": "Short insight."
-    }}
-  ]
+    "options": [
+        {{
+            "chartType": "bar|line|pie",
+            "xAxis": "column_name",
+            "yAxis": "column_name",
+            "aggregation": "sum|avg|count",
+            "groupBy": "column_name",
+            "filters": {{}},
+            "sort": "asc|desc",
+            "limit": 5,
+            "title": "chart title",
+            "insight": "short factual insight"
+        }}
+    ]
 }}
+
+If impossible with available columns, return exactly:
+{{"cannot_answer": true, "reason": "Data not available"}}
 """
 
 
@@ -228,7 +245,8 @@ def generate_query_spec(
 
     full_prompt = f"{system_prompt}\n\n=== HISTORY ===\n{history_text}\n\n=== INSTRUCTION ===\n{enhanced_prompt}"
 
-    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+    primary_key = get_primary_api_key()
+    if not quota_manager.is_quota_available(primary_key):
         logger.warning("[query_generator] Quota exhausted - using guaranteed fallback")
         return _generate_guaranteed_fallback(enhanced_prompt, schema)
 
@@ -240,7 +258,7 @@ def generate_query_spec(
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
-        quota_manager.record_request(settings.GROQ_API_KEY)
+        quota_manager.record_request(primary_key)
         raw = response.text
         logger.info("[query_generator] LLM raw response JSON:\n%s", raw)
         return _parse_payload(raw)

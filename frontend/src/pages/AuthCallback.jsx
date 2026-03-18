@@ -7,32 +7,33 @@ export default function AuthCallback() {
   const { fetchUserInfo } = useAuth();
 
   useEffect(() => {
-    // Extract token from URL hash
-    const hash = window.location.hash;
-    if (hash.includes('token=')) {
-      const token = hash.split('token=')[1].split('&')[0]; // Handle potential additional params
-      if (token) {
-        // Store the token
-        localStorage.setItem('authToken', token);
-        // Fetch user info and update context
-        fetchUserInfo(token).then(() => {
-          // Redirect to dashboard
+    const hash = window.location.hash || "";
+    const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    const queryParams = new URLSearchParams(window.location.search || "");
+
+    // Support token in either hash or query for compatibility.
+    const token = hashParams.get("token") || queryParams.get("token");
+
+    if (token) {
+      localStorage.setItem('authToken', token);
+      fetchUserInfo(token)
+        .then(() => {
           navigate("/dashboard", { replace: true });
+        })
+        .catch(() => {
+          navigate("/login?error=auth_failed", { replace: true });
         });
-      } else {
-        // No token found, redirect to login with error
-        navigate("/login?error=no_token", { replace: true });
-      }
-    } else {
-      // Check for error parameter
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('auth_error')) {
-        navigate("/login?error=auth_failed", { replace: true });
-      } else {
-        // No token or error, redirect to login
-        navigate("/login", { replace: true });
-      }
+      return;
     }
+
+    if (queryParams.get('auth_error')) {
+      const errorMsg = queryParams.get('error_msg');
+      const suffix = errorMsg ? `&error_msg=${encodeURIComponent(errorMsg)}` : "";
+      navigate(`/login?error=auth_failed${suffix}`, { replace: true });
+      return;
+    }
+
+    navigate("/login?error=no_token", { replace: true });
   }, [navigate, fetchUserInfo]);
 
   return (

@@ -3,10 +3,8 @@ import logging
 from functools import lru_cache
 from typing import Dict, List, Optional, Union
 
-from groq import Groq
-
 from config import settings
-from llm.genai_client import generate_with_retry, _GROQ_MODEL
+from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
 from llm.quota_manager import quota_manager
 
 # Configure logger for this module
@@ -24,19 +22,9 @@ class JSONParsingError(ChatEngineError):
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Optional[Groq]:
-    """Get the Groq client instance.
-
-    Returns None when the key is missing so callers can degrade gracefully.
-    """
-    if not settings.GROQ_API_KEY:
-        logger.info("Groq API key not configured; skipping chat LLM client init")
-        return None
-    try:
-        return Groq(api_key=settings.GROQ_API_KEY)
-    except Exception as exc:
-        logger.error(f"Failed to initialize Groq client: {exc}")
-        return None
+def _get_client() -> None:
+    """Gemini-only path: no provider-specific client needed by callers."""
+    return None
 
 
 def _parse_json_payload(raw: str) -> Dict:
@@ -162,7 +150,8 @@ def get_chat_response(
             "reason": "Empty message provided"
         }
 
-    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+    primary_key = get_primary_api_key()
+    if not quota_manager.is_quota_available(primary_key):
         logger.info("Using quota manager fallback for chat response")
         return quota_manager.get_fallback_response(
             "chat",
@@ -194,16 +183,13 @@ def get_chat_response(
         })
 
         client = _get_client()
-        if client is None:
-            logger.info("Skipping chat LLM call because Groq client is unavailable")
-            raise ChatEngineError("llm_unavailable")
 
         response = generate_with_retry(
             client=client,
             model=_GROQ_MODEL,
             contents=contents
         )
-        quota_manager.record_request(settings.GROQ_API_KEY)
+        quota_manager.record_request(primary_key)
         
         parsed = _parse_json_payload(response.text)
         
@@ -285,22 +271,20 @@ Rewrite the answer in 2-4 sentences using the exact figures from the SQL result.
 Return only the final answer text.
 """
 
-    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+    primary_key = get_primary_api_key()
+    if not quota_manager.is_quota_available(primary_key):
         logger.info("Using draft answer because local LLM backoff is active")
         return draft_answer
     
     try:
         client = _get_client()
-        if client is None:
-            logger.info("Skipping answer refinement because Groq client is unavailable")
-            return draft_answer
 
         response = generate_with_retry(
             client=client,
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
-        quota_manager.record_request(settings.GROQ_API_KEY)
+        quota_manager.record_request(primary_key)
         
         refined_answer = response.text.strip()
         if not refined_answer:

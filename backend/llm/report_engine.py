@@ -1,18 +1,14 @@
 from functools import lru_cache
 
-from groq import Groq
-
 from config import settings
-from llm.genai_client import generate_with_retry, _GROQ_MODEL
+from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
 from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Groq:
-    """Get the Groq client with API key configuration"""
-    if not settings.GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-    return Groq(api_key=settings.GROQ_API_KEY)
+def _get_client():
+    """Gemini-only path keeps compatibility with existing call sites."""
+    return None
 
 
 def generate_report_summary(dataset_name: str, charts: list) -> str:
@@ -34,7 +30,8 @@ Write a 3-5 sentence executive summary paragraph that:
 
 Return only the paragraph text.
 """
-    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+    primary_key = get_primary_api_key()
+    if not quota_manager.is_quota_available(primary_key):
         return quota_manager.get_fallback_response(
             "report_summary",
             dataset_name=dataset_name,
@@ -48,7 +45,7 @@ Return only the paragraph text.
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
-        quota_manager.record_request(settings.GROQ_API_KEY)
+        quota_manager.record_request(primary_key)
         return response.text.strip()
     except Exception as exc:
         # Use intelligent fallback if quota exhausted

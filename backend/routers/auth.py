@@ -26,6 +26,19 @@ def _normalize_origin(url: str | None) -> str | None:
     return normalized.rstrip("/")
 
 
+def _is_development_env() -> bool:
+    env = (settings.ENVIRONMENT or "").strip().lower()
+    return env in {"", "development", "dev", "debug", "local"}
+
+
+def _is_loopback_origin(origin: str | None) -> bool:
+    normalized = _normalize_origin(origin)
+    if not normalized:
+        return False
+    parsed = urlparse(normalized)
+    return parsed.scheme in {"http", "https"} and parsed.hostname in {"localhost", "127.0.0.1"}
+
+
 def _allowed_frontend_origins(request: Request | None = None) -> set[str]:
     allowed: set[str] = set()
     primary = _normalize_origin(settings.FRONTEND_URL)
@@ -58,17 +71,26 @@ def _resolve_frontend_redirect(request: Request, requested: str | None = None) -
         or _normalize_origin(settings.FRONTEND_URL)
         or _normalize_origin(str(request.base_url))
     )
-    if candidate and candidate in allowed:
+    if candidate and (
+        candidate in allowed
+        or (_is_development_env() and _is_loopback_origin(candidate))
+    ):
         return candidate
     raise HTTPException(status_code=400, detail="Invalid frontend redirect origin")
 
 
 def _resolve_callback_uri(request: Request) -> str:
+    # Use configured callback URI to avoid Google redirect_uri mismatch caused by
+    # host variations (localhost vs 127.0.0.1, reverse proxy host headers, etc.)
+    configured = (settings.REDIRECT_URI or "").strip()
+    if configured:
+        return configured
+
     try:
         return str(request.url_for("callback"))
     except NoMatchFound:
-        logger.error("Callback route not found; falling back to configured REDIRECT_URI")
-        return settings.REDIRECT_URI
+        logger.error("Callback route not found and REDIRECT_URI is empty")
+        raise HTTPException(status_code=500, detail="OAuth callback URI is not configured")
 
 
 def _build_state(frontend_origin: str) -> str:
@@ -100,7 +122,9 @@ def _parse_and_validate_state(request: Request, state: str | None) -> str | None
     normalized = _normalize_origin(origin)
     if not normalized:
         raise HTTPException(status_code=400, detail="Invalid redirect origin")
-    if normalized not in _allowed_frontend_origins(request):
+    if normalized not in _allowed_frontend_origins(request) and not (
+        _is_development_env() and _is_loopback_origin(normalized)
+    ):
         raise HTTPException(status_code=400, detail="Redirect origin not allowed")
     return normalized
 
@@ -141,7 +165,7 @@ async def callback(request: Request, code: str, state: str | None = None):
         except HTTPException:
             logger.critical("No valid frontend origin configured for OAuth error handling")
             raise HTTPException(status_code=500, detail="No valid frontend origin configured")
-        return RedirectResponse(url=f"{fallback_frontend}?auth_error=true&error_msg={error_msg}")
+        return RedirectResponse(url=f"{fallback_frontend}/auth/callback?auth_error=true&error_msg={error_msg}")
 
 
 @router.get("/me")

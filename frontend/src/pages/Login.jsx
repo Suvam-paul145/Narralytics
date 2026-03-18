@@ -9,6 +9,7 @@ export default function Login() {
   const { loginAsGuest, user } = useAuth();
   const [searchParams] = useSearchParams();
   const error = searchParams.get('error');
+  const errorMsg = searchParams.get('error_msg');
   
   React.useEffect(() => {
     if (user) {
@@ -30,6 +31,14 @@ export default function Login() {
   };
 
   const getErrorMessage = (errorCode) => {
+    if (errorMsg) {
+      try {
+        return decodeURIComponent(errorMsg);
+      } catch {
+        return errorMsg;
+      }
+    }
+
     switch (errorCode) {
       case 'auth_failed':
         return 'Authentication failed. Please try again.';

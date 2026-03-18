@@ -9,19 +9,15 @@ hallucinated column names from ever reaching the SQL generator.
 import re
 from functools import lru_cache
 
-from groq import Groq
-
 from config import settings
-from llm.genai_client import _GROQ_MODEL, generate_with_retry
+from llm.genai_client import _GROQ_MODEL, generate_with_retry, get_primary_api_key
 from llm.quota_manager import quota_manager
 
 
 @lru_cache(maxsize=1)
-def _get_client() -> Groq:
-    """Get the Groq client instance."""
-    if not settings.GROQ_API_KEY:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-    return Groq(api_key=settings.GROQ_API_KEY)
+def _get_client():
+    """Gemini-only path keeps compatibility with existing call sites."""
+    return None
 
 
 _SYSTEM_TEMPLATE = """
@@ -112,8 +108,9 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
     # First try: do smart substitutions client-side
     smart_enhanced = _smart_prompt_substitute(raw, schema)
     
-    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
-        print("Groq API quota exhausted, using smart prompt enhancement")
+    primary_key = get_primary_api_key()
+    if not quota_manager.is_quota_available(primary_key):
+        print("Gemini API quota exhausted, using smart prompt enhancement")
         return smart_enhanced
 
     schema_text = build_schema_text(schema)
@@ -139,7 +136,7 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
         )
-        quota_manager.record_request(settings.GROQ_API_KEY)
+        quota_manager.record_request(primary_key)
         enhanced = response.text.strip()
 
         # If response is JSON or too long, fallback to smart enhancement
