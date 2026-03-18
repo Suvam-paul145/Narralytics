@@ -19,8 +19,9 @@ export default function Login() {
   if (user) return null;
 
   const handleGoogleLogin = () => {
-    // Redirect to backend OAuth endpoint
-    window.location.href = `${API_BASE_URL}/auth/google`;
+    const frontendOrigin = window.location.origin;
+    // Redirect to backend OAuth endpoint with explicit return origin
+    window.location.href = `${API_BASE_URL}/auth/google?redirect=${encodeURIComponent(frontendOrigin)}`;
   };
 
   const handleGuestLogin = () => {
