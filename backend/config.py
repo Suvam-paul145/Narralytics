@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     REDIRECT_URI: str = "http://localhost:8000/auth/callback"
+    OAUTH_STATE_SECRET: str = ""
     FRONTEND_URL: str = "http://localhost:5173"
     FRONTEND_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -61,4 +62,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

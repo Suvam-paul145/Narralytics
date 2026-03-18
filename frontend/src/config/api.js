@@ -5,7 +5,11 @@ const allowedRuntimeOrigins = (import.meta.env.VITE_ALLOWED_API_ORIGINS || "")
   .map((o) => o.trim())
   .filter(Boolean);
 
-const isLocalOrigin = runtimeOrigin?.startsWith("http://localhost") || runtimeOrigin?.startsWith("http://127.0.0.1");
+const isLocalOrigin =
+  runtimeOrigin?.startsWith("http://localhost") ||
+  runtimeOrigin?.startsWith("http://127.0.0.1") ||
+  runtimeOrigin?.startsWith("https://localhost") ||
+  runtimeOrigin?.startsWith("https://127.0.0.1");
 const isAllowedRuntimeOrigin = runtimeOrigin && (isLocalOrigin || allowedRuntimeOrigins.includes(runtimeOrigin));
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (isAllowedRuntimeOrigin ? runtimeOrigin : undefined) || "http://localhost:8000";

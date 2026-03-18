@@ -40,9 +40,6 @@ def _allowed_frontend_origins(request: Request | None = None) -> set[str]:
         backend_origin = _normalize_origin(str(request.base_url))
         if backend_origin:
             allowed.add(backend_origin)
-        request_origin = _normalize_origin(request.headers.get("origin"))
-        if request_origin:
-            allowed.add(request_origin)
     return allowed
 
 
@@ -70,8 +67,9 @@ def _build_state(frontend_origin: str) -> str:
     normalized = _normalize_origin(frontend_origin)
     if not normalized:
         raise HTTPException(status_code=400, detail="Invalid redirect origin")
+    state_secret = (settings.OAUTH_STATE_SECRET or settings.JWT_SECRET).encode("utf-8")
     signature = hmac.new(
-        key=settings.JWT_SECRET.encode("utf-8"),
+        key=state_secret,
         msg=normalized.encode("utf-8"),
         digestmod=hashlib.sha256,
     ).hexdigest()
@@ -85,8 +83,9 @@ def _parse_and_validate_state(request: Request, state: str | None) -> str | None
         origin, signature = state.rsplit("|", 1)
     except ValueError:
         raise HTTPException(status_code=400, detail="Malformed state parameter")
+    state_secret = (settings.OAUTH_STATE_SECRET or settings.JWT_SECRET).encode("utf-8")
     expected = hmac.new(
-        key=settings.JWT_SECRET.encode("utf-8"),
+        key=state_secret,
         msg=origin.encode("utf-8"),
         digestmod=hashlib.sha256,
     ).hexdigest()
@@ -128,7 +127,14 @@ async def callback(request: Request, code: str, state: str | None = None):
     except Exception as exc:
         error_msg = quote(str(exc))
         logger.exception("OAuth callback failed during token exchange or redirect")
-        fallback_frontend = _resolve_frontend_redirect(request, None)
+        try:
+            fallback_frontend = _resolve_frontend_redirect(request, None)
+        except HTTPException:
+            fallback_frontend = (
+                _normalize_origin(settings.FRONTEND_URL)
+                or _normalize_origin(str(request.base_url))
+                or "http://localhost:5173"
+            )
         return RedirectResponse(url=f"{fallback_frontend}?auth_error=true&error_msg={error_msg}")
 
 
