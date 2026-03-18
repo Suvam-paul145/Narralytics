@@ -115,8 +115,8 @@ def login(request: Request, redirect: str | None = None):
 
 @router.get("/callback")
 async def callback(request: Request, code: str, state: str | None = None):
+    stage = "state validation"
     try:
-        stage = "state validation"
         callback_uri = _resolve_callback_uri(request)
         state_origin = _parse_and_validate_state(request, state)
         frontend_origin = _resolve_frontend_redirect(request, state_origin)
