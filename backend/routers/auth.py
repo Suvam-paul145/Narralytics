@@ -43,6 +43,13 @@ def _allowed_frontend_origins(request: Request | None = None) -> set[str]:
     return allowed
 
 
+def _state_secret() -> bytes:
+    if settings.OAUTH_STATE_SECRET:
+        return settings.OAUTH_STATE_SECRET.encode("utf-8")
+    logger.warning("OAUTH_STATE_SECRET not set; falling back to JWT_SECRET for OAuth state signing")
+    return settings.JWT_SECRET.encode("utf-8")
+
+
 def _resolve_frontend_redirect(request: Request, requested: str | None = None) -> str:
     allowed = _allowed_frontend_origins(request)
     candidate = (
@@ -67,9 +74,8 @@ def _build_state(frontend_origin: str) -> str:
     normalized = _normalize_origin(frontend_origin)
     if not normalized:
         raise HTTPException(status_code=400, detail="Invalid redirect origin")
-    state_secret = (settings.OAUTH_STATE_SECRET or settings.JWT_SECRET).encode("utf-8")
     signature = hmac.new(
-        key=state_secret,
+        key=_state_secret(),
         msg=normalized.encode("utf-8"),
         digestmod=hashlib.sha256,
     ).hexdigest()
@@ -83,9 +89,8 @@ def _parse_and_validate_state(request: Request, state: str | None) -> str | None
         origin, signature = state.rsplit("|", 1)
     except ValueError:
         raise HTTPException(status_code=400, detail="Malformed state parameter")
-    state_secret = (settings.OAUTH_STATE_SECRET or settings.JWT_SECRET).encode("utf-8")
     expected = hmac.new(
-        key=state_secret,
+        key=_state_secret(),
         msg=origin.encode("utf-8"),
         digestmod=hashlib.sha256,
     ).hexdigest()
@@ -110,10 +115,13 @@ def login(request: Request, redirect: str | None = None):
 @router.get("/callback")
 async def callback(request: Request, code: str, state: str | None = None):
     try:
+        stage = "state validation"
         callback_uri = _resolve_callback_uri(request)
         state_origin = _parse_and_validate_state(request, state)
         frontend_origin = _resolve_frontend_redirect(request, state_origin)
+        stage = "token exchange"
         google_user = await exchange_code_for_user(code, redirect_uri=callback_uri)
+        stage = "user creation"
         await upsert_user(google_user)
         token = create_jwt(
             {
@@ -126,13 +134,13 @@ async def callback(request: Request, code: str, state: str | None = None):
         return RedirectResponse(url=f"{frontend_origin}/auth/callback#token={token}")
     except Exception as exc:
         error_msg = quote(str(exc))
-        logger.exception("OAuth callback failed during token exchange or redirect")
+        logger.exception("OAuth callback failed during %s", stage)
         try:
             fallback_frontend = _resolve_frontend_redirect(request, None)
         except HTTPException:
             fallback_frontend = (
                 _normalize_origin(settings.FRONTEND_URL)
-                or _normalize_origin(str(request.base_url))
+                or next(iter(_allowed_frontend_origins(None)), None)
                 or "http://localhost:5173"
             )
         return RedirectResponse(url=f"{fallback_frontend}?auth_error=true&error_msg={error_msg}")
