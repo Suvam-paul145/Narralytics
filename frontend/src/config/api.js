@@ -1,6 +1,14 @@
 // API configuration — single source of truth for all endpoint URLs
 const runtimeOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-const API_BASE_URL = import.meta.env.VITE_API_URL || runtimeOrigin || "http://localhost:8000";
+const allowedRuntimeOrigins = (import.meta.env.VITE_ALLOWED_API_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const isLocalOrigin = runtimeOrigin?.startsWith("http://localhost") || runtimeOrigin?.startsWith("http://127.0.0.1");
+const isAllowedRuntimeOrigin = runtimeOrigin && (isLocalOrigin || allowedRuntimeOrigins.includes(runtimeOrigin));
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || (isAllowedRuntimeOrigin ? runtimeOrigin : undefined) || "http://localhost:8000";
 
 export const API_ENDPOINTS = {
   HEALTH: `${API_BASE_URL}/api/health`,

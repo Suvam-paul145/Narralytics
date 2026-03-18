@@ -1,11 +1,10 @@
 import hashlib
 import hmac
 import logging
-import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from starlette.routing import NoMatchFound
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from auth.dependencies import get_current_user
 from auth.jwt_handler import create_jwt
@@ -79,7 +78,7 @@ def _build_state(frontend_origin: str) -> str:
     return f"{normalized}|{signature}"
 
 
-def _parse_state(request: Request, state: str | None) -> str | None:
+def _parse_and_validate_state(request: Request, state: str | None) -> str | None:
     if not state:
         return None
     try:
@@ -113,7 +112,7 @@ def login(request: Request, redirect: str | None = None):
 async def callback(request: Request, code: str, state: str | None = None):
     try:
         callback_uri = _resolve_callback_uri(request)
-        state_origin = _parse_state(request, state)
+        state_origin = _parse_and_validate_state(request, state)
         frontend_origin = _resolve_frontend_redirect(request, state_origin)
         google_user = await exchange_code_for_user(code, redirect_uri=callback_uri)
         await upsert_user(google_user)
@@ -127,8 +126,8 @@ async def callback(request: Request, code: str, state: str | None = None):
         )
         return RedirectResponse(url=f"{frontend_origin}/auth/callback#token={token}")
     except Exception as exc:
-        error_msg = urllib.parse.quote(str(exc))
-        logger.exception("Auth error during OAuth callback")
+        error_msg = quote(str(exc))
+        logger.exception("OAuth callback failed during token exchange or redirect")
         fallback_frontend = _resolve_frontend_redirect(request, None)
         return RedirectResponse(url=f"{fallback_frontend}?auth_error=true&error_msg={error_msg}")
 
