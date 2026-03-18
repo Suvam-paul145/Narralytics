@@ -456,12 +456,8 @@ export default function Chat() {
   const [uploadError, setUploadError] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [pipelineState, setPipelineState] = useState(null);
-  const [isExporting, setIsExporting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
-  const [mounted, setMounted] = useState(false);
-  const [greeting, setGreeting] = useState("Good morning");
-  const textareaRef = useRef(null);
 
   const hasMessages = messages.length > 0;
 
@@ -620,10 +616,12 @@ export default function Chat() {
           dataset_name: datasetName || null,
         }),
       });
-      
-      if (!response.ok) throw new Error("Failed to update session metadata");
+
+      if (!response.ok) {
+        throw new Error(`Failed to save session: ${response.status}`);
+      }
     } catch (err) {
-      console.error("Failed to upsert session meta:", err);
+      console.error("Session metadata update failed:", err);
     }
   }, []);
 
