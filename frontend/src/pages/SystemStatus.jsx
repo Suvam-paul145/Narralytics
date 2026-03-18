@@ -1,66 +1,85 @@
-import React from 'react';
-import HealthStatus from '../components/common/HealthStatus';
-import { useHealthCheck } from '../hooks/useHealthCheck';
+import React from "react";
+import HealthStatus from "../components/common/HealthStatus";
+import { useHealthCheck } from "../hooks/useHealthCheck";
+
+const cardStyle = {
+  background: "#ffffff",
+  borderRadius: 10,
+  border: "1px solid #e5e7eb",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+  padding: 24,
+};
+
+const rowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+};
 
 const SystemStatus = () => {
-  const { healthStatus, isChecking, checkHealth } = useHealthCheck(10000); // Check every 10 seconds
-
-  const handleManualCheck = () => {
-    checkHealth();
-  };
+  const { healthStatus, isChecking, checkHealth } = useHealthCheck(10000);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">System Status</h1>
-          <p className="mt-2 text-gray-600">
+    <div style={{ minHeight: "100vh", background: "#f9fafb", padding: "32px 16px" }}>
+      <div style={{ maxWidth: 1024, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: "2rem", margin: 0, color: "#111827" }}>System Status</h1>
+          <p style={{ marginTop: 8, color: "#4b5563" }}>
             Monitor the health and connectivity of all system components
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Main Health Status */}
-          <div className="lg:col-span-2">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: 16,
+            alignItems: "start",
+          }}
+        >
+          <div style={{ ...cardStyle, gridColumn: "1 / -1" }}>
             <HealthStatus showDetails={true} />
           </div>
 
-          {/* Manual Check Button */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Manual Health Check</h3>
+          <div style={cardStyle}>
+            <h3 style={{ margin: "0 0 16px", fontSize: "1.1rem", color: "#1f2937" }}>Manual Health Check</h3>
             <button
-              onClick={handleManualCheck}
+              onClick={checkHealth}
               disabled={isChecking}
-              className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
-                isChecking
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 8,
+                border: "none",
+                background: isChecking ? "#d1d5db" : "#2563eb",
+                color: isChecking ? "#6b7280" : "#ffffff",
+                fontWeight: 600,
+                cursor: isChecking ? "not-allowed" : "pointer",
+              }}
             >
-              {isChecking ? 'Checking...' : 'Run Health Check'}
+              {isChecking ? "Checking..." : "Run Health Check"}
             </button>
           </div>
 
-          {/* System Information */}
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">System Information</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Frontend Version:</span>
-                <span className="text-sm font-medium">2.0.0</span>
+          <div style={cardStyle}>
+            <h3 style={{ margin: "0 0 16px", fontSize: "1.1rem", color: "#1f2937" }}>System Information</h3>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={rowStyle}>
+                <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>Frontend Version:</span>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>2.0.0</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">API Version:</span>
-                <span className="text-sm font-medium">2.0.0</span>
+              <div style={rowStyle}>
+                <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>API Version:</span>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>2.0.0</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Health Check Interval:</span>
-                <span className="text-sm font-medium">10 seconds</span>
+              <div style={rowStyle}>
+                <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>Health Check Interval:</span>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>10 seconds</span>
               </div>
               {healthStatus.timestamp && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Server Time:</span>
-                  <span className="text-sm font-medium">
+                <div style={rowStyle}>
+                  <span style={{ fontSize: "0.9rem", color: "#4b5563" }}>Server Time:</span>
+                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>
                     {new Date(healthStatus.timestamp).toLocaleString()}
                   </span>
                 </div>
@@ -69,11 +88,10 @@ const SystemStatus = () => {
           </div>
         </div>
 
-        {/* Status History or Logs could be added here */}
-        <div className="mt-8 bg-white rounded-lg shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Connection Details</h3>
-          <div className="bg-gray-50 rounded-md p-4">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+        <div style={{ ...cardStyle, marginTop: 16 }}>
+          <h3 style={{ margin: "0 0 16px", fontSize: "1.1rem", color: "#1f2937" }}>Connection Details</h3>
+          <div style={{ background: "#f3f4f6", borderRadius: 8, padding: 12 }}>
+            <pre style={{ margin: 0, fontSize: "0.8rem", color: "#374151", whiteSpace: "pre-wrap" }}>
               {JSON.stringify(healthStatus, null, 2)}
             </pre>
           </div>
