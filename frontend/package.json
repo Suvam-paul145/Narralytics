@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "vercel:login": "vercel login",
+    "vercel:link": "vercel link --yes",
+    "vercel:env": "vercel env add VITE_API_URL",
+    "vercel:deploy": "vercel deploy --prod",
+    "deploy:vercel": "npm run build && vercel deploy --prod"
   },
   "dependencies": {
     "echarts": "^6.0.0",

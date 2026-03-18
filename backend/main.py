@@ -72,10 +72,11 @@ async def api_health() -> dict:
     }
     
     # Check MongoDB connection
+    from database import mongodb
     try:
-        if client is not None:
+        if mongodb.client is not None:
             # Ping MongoDB with a timeout
-            await asyncio.wait_for(client.admin.command('ping'), timeout=5.0)
+            await asyncio.wait_for(mongodb.client.admin.command('ping'), timeout=5.0)
             health_status["services"]["database"] = "healthy"
         else:
             health_status["services"]["database"] = "disconnected"
