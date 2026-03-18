@@ -30,7 +30,7 @@ def test_column_codes_are_stable_and_safe(tmp_path: Path):
     assert schema["column_codes"] == column_codes
     assert schema["date_column_codes"] == ["Order_Date"]
     assert schema["numeric_column_codes"] == ["Revenue_percent"]
-    assert set(schema["categorical_column_codes"]) == {"Region_Code", "Notes_optional"}
+    assert schema["categorical_column_codes"] == ["Region_Code", "Notes_optional"]
 
     # Loading into SQLite should use the same codes, ensuring the pipeline is consistent
     db_path = tmp_path / "pipeline.db"
