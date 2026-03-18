@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+import logging
+import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from starlette.routing import NoMatchFound
@@ -12,6 +14,7 @@ from config import settings
 from database.users import upsert_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 def _normalize_origin(url: str | None) -> str | None:
@@ -124,9 +127,8 @@ async def callback(request: Request, code: str, state: str | None = None):
         )
         return RedirectResponse(url=f"{frontend_origin}/auth/callback#token={token}")
     except Exception as exc:
-        import urllib.parse
         error_msg = urllib.parse.quote(str(exc))
-        print(f"Auth error: {exc}")
+        logger.exception("Auth error during OAuth callback")
         fallback_frontend = _resolve_frontend_redirect(request, None)
         return RedirectResponse(url=f"{fallback_frontend}?auth_error=true&error_msg={error_msg}")
 
