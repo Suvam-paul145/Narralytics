@@ -76,10 +76,10 @@ def convert_llm_json_to_chart_spec(options: list[dict], schema: dict) -> list[di
     try:
         results = []
         for opt in options:
-            chart_type = opt.get("chartType", "bar")
-            x_axis = opt.get("xAxis")
-            y_axis = opt.get("yAxis")
-            group_by = opt.get("groupBy")
+            chart_type = opt.get("chartType") or opt.get("chart_type") or "bar"
+            x_axis = opt.get("xAxis") or opt.get("x_key")
+            y_axis = opt.get("yAxis") or opt.get("y_key")
+            group_by = opt.get("groupBy") or opt.get("group_by") or opt.get("color_by")
             
             # If invalid output, trigger fallback
             if not x_axis or not y_axis:
@@ -88,7 +88,7 @@ def convert_llm_json_to_chart_spec(options: list[dict], schema: dict) -> list[di
                 x_axis = opt["xAxis"]
                 y_axis = opt["yAxis"]
 
-            sql = generate_sql_from_structured_json(opt, schema)
+            sql = opt.get("sql") or generate_sql_from_structured_json(opt, schema)
 
             # ECharts compatible mapping + trick for dynamic distinct colors
             # The frontend assigns different colors based on `color_by` 

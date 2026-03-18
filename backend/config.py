@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
+    @field_validator("GROQ_API_KEY", "GEMINI_API_KEY", mode="before")
+    @classmethod
+    def strip_api_keys(cls, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value.strip()
+        return str(value).strip()
+
     @field_validator("DEBUG", mode="before")
     @classmethod
     def normalize_debug(cls, value: Any) -> bool:

@@ -306,6 +306,10 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
     except ValueError as e:
         logger.error(f"Invalid schema: {e}")
         return []
+
+    if not quota_manager.is_quota_available(settings.GROQ_API_KEY):
+        logger.info("Using fallback dashboard generation due to active local backoff")
+        return quota_manager.get_fallback_response("auto_dashboard", schema=schema)
     
     try:
         client = _get_client()
@@ -314,6 +318,7 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
             model=DEFAULT_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
+        quota_manager.record_request(settings.GROQ_API_KEY)
         
         if not response or not response.text:
             logger.error("Empty response from GenAI model")
@@ -346,7 +351,7 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         logger.exception(f"Auto-dashboard generation failed: {e}")
         
         # Use intelligent fallback if quota exhausted
-        if "QUOTA_EXHAUSTED" in str(e):
+        if quota_manager.is_quota_error(e):
             logger.info("Using fallback dashboard generation due to quota exhaustion")
             return quota_manager.get_fallback_response("auto_dashboard", schema=schema)
         

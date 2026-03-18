@@ -151,9 +151,10 @@ async function exportReport(dataset_id, messages) {
         charts.push({
           title: chart.spec.title,
           insight: chart.spec.insight,
-          chart_type: chart.spec.chart_type
-          // Note: Capturing actual ECharts base64 would be ideal, 
-          // but for now we send the data/spec for server-side or placeholder rendering.
+          chart_type: chart.spec.chart_type,
+          // Send spec and data for server-side rendering
+          spec: chart.spec,
+          data: chart.data
         });
       });
     }
@@ -394,7 +395,10 @@ export default function Chat() {
           charts.push({
             title: chart.spec.title,
             insight: chart.spec.insight,
-            chart_type: chart.spec.chart_type
+            chart_type: chart.spec.chart_type,
+            // Send spec and data for server-side rendering
+            spec: chart.spec,
+            data: chart.data
           });
         });
       }
