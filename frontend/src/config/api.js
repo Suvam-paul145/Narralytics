@@ -14,8 +14,8 @@ const resolveApiBaseUrl = () => {
     origin?.startsWith("https://localhost") ||
     origin?.startsWith("https://127.0.0.1");
 
-  const isAllowedRuntimeOrigin = runtimeOrigin && (isLocalOrigin(runtimeOrigin) || allowedRuntimeOrigins.includes(runtimeOrigin));
-  if (isAllowedRuntimeOrigin) return runtimeOrigin;
+  const runtimeOriginIsAllowed = runtimeOrigin && (isLocalOrigin(runtimeOrigin) || allowedRuntimeOrigins.includes(runtimeOrigin));
+  if (runtimeOriginIsAllowed) return runtimeOrigin;
 
   return "http://localhost:8000";
 };
