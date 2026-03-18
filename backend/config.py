@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     REDIRECT_URI: str = "http://localhost:8000/auth/callback"
-    OAUTH_STATE_SECRET: str = ""
+    OAUTH_STATE_SECRET: str
     FRONTEND_URL: str = "http://localhost:5173"
     FRONTEND_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -57,6 +57,13 @@ class Settings(BaseSettings):
                 return False
 
         raise ValueError("DEBUG must be a boolean-like value")
+
+    @field_validator("OAUTH_STATE_SECRET")
+    @classmethod
+    def require_state_secret(cls, value: Any) -> str:
+        if not value or not str(value).strip():
+            raise ValueError("OAUTH_STATE_SECRET must be configured")
+        return str(value).strip()
 
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 

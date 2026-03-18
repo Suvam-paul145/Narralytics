@@ -139,11 +139,8 @@ async def callback(request: Request, code: str, state: str | None = None):
         try:
             fallback_frontend = _resolve_frontend_redirect(request, None)
         except HTTPException:
-            fallback_frontend = (
-                _normalize_origin(settings.FRONTEND_URL)
-                or next(iter(_allowed_frontend_origins(None)), None)
-                or "http://localhost:5173"
-            )
+            logger.critical("No valid frontend origin configured for OAuth error handling")
+            raise HTTPException(status_code=500, detail="No valid frontend origin configured")
         return RedirectResponse(url=f"{fallback_frontend}?auth_error=true&error_msg={error_msg}")
 
 
