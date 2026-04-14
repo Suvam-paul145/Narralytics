@@ -6,31 +6,6 @@ from sqlite.loader import generate_column_code
 
 logger = logging.getLogger(__name__)
 
-def build_fallback_chart(schema: dict) -> dict:
-    """Fallback if LLM JSON fails to parse or is radically invalid."""
-    x_axis = "unknown"
-    y_axis = "unknown"
-    if schema.get("categorical_columns"):
-        x_axis = schema["categorical_columns"][0]
-    elif schema.get("columns"):
-        x_axis = schema["columns"][0]["name"]
-
-    if schema.get("numeric_columns"):
-        y_axis = schema["numeric_columns"][0]
-    elif len(schema.get("columns", [])) > 1:
-        y_axis = schema["columns"][1]["name"]
-
-    return {
-        "chartType": "bar",
-        "xAxis": x_axis,
-        "yAxis": y_axis,
-        "aggregation": "sum",
-        "groupBy": None,
-        "filters": {},
-        "limit": 10,
-    }
-
-
 def _normalize_identifier(value: str | None, schema: Dict[str, Any]) -> str | None:
     """Map a raw column label from the LLM to the normalized SQLite column code.
 
@@ -68,11 +43,9 @@ def generate_sql_from_structured_json(json_spec: dict, schema: dict) -> str:
     filters = json_spec.get("filters", {})
     limit = json_spec.get("limit", 10)
 
-    # Basic safety fallbacks
+    # Reject invalid specs instead of injecting hardcoded visuals.
     if not x_axis or not y_axis:
-        fb = build_fallback_chart(schema)
-        x_axis = _normalize_identifier(fb["xAxis"], schema)
-        y_axis = _normalize_identifier(fb["yAxis"], schema)
+        raise ValueError("Missing required x/y axis for SQL generation")
 
     if agg not in ["SUM", "COUNT", "AVG", "MIN", "MAX"]:
         agg = "SUM"
@@ -116,12 +89,10 @@ def convert_llm_json_to_chart_spec(options: list[dict], schema: dict) -> list[di
                 schema,
             )
             
-            # If invalid output, trigger fallback
+            # Skip invalid options; do not inject hardcoded fallback visuals.
             if not x_axis or not y_axis:
-                opt = build_fallback_chart(schema)
-                chart_type = opt["chartType"]
-                x_axis = opt["xAxis"]
-                y_axis = opt["yAxis"]
+                logger.warning("Skipping option with unresolved axes: %s", json.dumps(opt))
+                continue
 
             sql = opt.get("sql") or generate_sql_from_structured_json(opt, schema)
 
@@ -141,15 +112,5 @@ def convert_llm_json_to_chart_spec(options: list[dict], schema: dict) -> list[di
             })
         return results
     except Exception as e:
-        logger.error(f"Fallback triggered due to error parsing LLM json: {e}")
-        fb = build_fallback_chart(schema)
-        sql = generate_sql_from_structured_json(fb, schema)
-        return [{
-            "chart_type": fb["chartType"],
-            "x_key": fb["xAxis"],
-            "y_key": fb["yAxis"],
-            "color_by": fb["xAxis"], # force distinct colors
-            "sql": sql,
-            "title": "Fallback Dashboard",
-            "insight": "Could not parse query, showing default metrics."
-        }]
+        logger.error(f"Failed to parse LLM chart JSON: {e}")
+        return []

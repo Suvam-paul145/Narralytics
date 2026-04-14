@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Dict, List
 
-from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
+from llm.genai_client import generate_with_retry, get_primary_api_key, select_model_for_task
 from llm.quota_manager import quota_manager
 
 # Configure logger for this module
@@ -176,7 +176,7 @@ def get_chat_response(
 
         response = generate_with_retry(
             client=None,
-            model=_GROQ_MODEL,
+            model=select_model_for_task("chat"),
             contents=contents
         )
         quota_manager.record_request(primary_key)
@@ -256,7 +256,7 @@ Return only the final answer text.
     try:
         response = generate_with_retry(
             client=None,
-            model=_GROQ_MODEL,
+            model=select_model_for_task("refine"),
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
         quota_manager.record_request(primary_key)

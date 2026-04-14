@@ -2,13 +2,16 @@ import json
 import logging
 from typing import Dict, List, Any
 
-from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
+from llm.genai_client import (
+    generate_with_retry,
+    get_primary_api_key,
+    select_model_for_task,
+)
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
 
 # Constants for better maintainability
-DEFAULT_MODEL = _GROQ_MODEL
 MIN_CHARTS = 6
 MAX_CHARTS = 10
 MAX_PIE_CATEGORIES = 6
@@ -141,7 +144,7 @@ def _validate_schema(schema: Dict[str, Any]) -> bool:
     return True
 
 
-def build_auto_dashboard_prompt(schema: Dict[str, Any]) -> str:
+def build_auto_dashboard_prompt(schema: Dict[str, Any], requirements: str | None = None) -> str:
     """Build the prompt for auto-dashboard generation.
     
     Args:
@@ -164,6 +167,12 @@ def build_auto_dashboard_prompt(schema: Dict[str, Any]) -> str:
     numeric_cols = ", ".join(schema.get("numeric_columns", [])) or "None"  
     categorical_cols = ", ".join(schema.get("categorical_columns", [])) or "None"
 
+    requirement_block = (
+        f"\n=== DASHBOARD REQUIREMENTS FROM USER ===\n{requirements.strip()}\n"
+        if requirements and requirements.strip()
+        else ""
+    )
+
     return f"""
 You are a senior BI analyst generating an automatic dashboard for a newly uploaded dataset.
 
@@ -175,6 +184,7 @@ Columns:
 Date columns: {date_cols}
 Numeric columns: {numeric_cols}
 Categorical columns: {categorical_cols}
+{requirement_block}
 
 === YOUR TASK ===
 Generate between {MIN_CHARTS} and {MAX_CHARTS} chart specifications that cover the most valuable business insights
@@ -264,7 +274,7 @@ def _validate_chart_response(charts: List[Dict[str, Any]]) -> List[Dict[str, Any
     return valid_charts
 
 
-def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
+def generate_auto_dashboard(schema: Dict[str, Any], requirements: str | None = None) -> List[Dict[str, Any]]:
     """Generate automatic dashboard charts based on dataset schema.
     
     Args:
@@ -278,20 +288,20 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         return []
     
     try:
-        prompt = build_auto_dashboard_prompt(schema)
+        prompt = build_auto_dashboard_prompt(schema, requirements=requirements)
     except ValueError as e:
         logger.error(f"Invalid schema: {e}")
         return []
 
     primary_key = get_primary_api_key()
     if not quota_manager.is_quota_available(primary_key):
-        logger.info("Using fallback dashboard generation due to active local backoff")
-        return quota_manager.get_fallback_response("auto_dashboard", schema=schema)
+        logger.info("Auto-dashboard generation blocked due to active local LLM backoff")
+        return []
     
     try:
         response = generate_with_retry(
             client=None,
-            model=_GROQ_MODEL,
+            model=select_model_for_task("dashboard"),
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
         quota_manager.record_request(primary_key)
@@ -328,7 +338,7 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         
         # Use intelligent fallback if quota exhausted
         if quota_manager.is_quota_error(e):
-            logger.info("Using fallback dashboard generation due to quota exhaustion")
-            return quota_manager.get_fallback_response("auto_dashboard", schema=schema)
+            logger.info("Auto-dashboard generation failed due to quota exhaustion")
+            return []
         
         return []

@@ -40,15 +40,12 @@ Line two"
     assert payload["options"][0]["insight"] == "Line one\nLine two"
 
 
-def test_query_fallback_returns_structured_chart_options():
+def test_query_fallback_returns_unavailable_error():
     fallback = quota_manager.get_fallback_response(
         "query_generation",
         prompt="compare sales by region",
         schema=SCHEMA,
     )
 
-    option = fallback["options"][0]
-    assert fallback["cannot_answer"] is False
-    assert option["chartType"] == "bar"
-    assert option["xAxis"] == "region"
-    assert option["yAxis"] == "sales"
+    assert fallback["cannot_answer"] is True
+    assert "quota" in fallback["reason"].lower() or "unavailable" in fallback["reason"].lower()
