@@ -1,7 +1,7 @@
 import json
 import logging
 
-from llm.genai_client import _GROQ_MODEL, generate_with_retry, get_primary_api_key
+from llm.genai_client import generate_with_retry, get_primary_api_key, select_model_for_task
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
@@ -191,7 +191,7 @@ def generate_query_spec(
         logger.info("[query_generator] Requesting LLM for schema query")
         response = generate_with_retry(
             client=None,
-            model=_GROQ_MODEL,
+            model=select_model_for_task("query"),
             contents=contents,
         )
         quota_manager.record_request(primary_key)

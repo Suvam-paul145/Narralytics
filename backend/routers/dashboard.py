@@ -7,6 +7,7 @@ from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
 from database.history import save_interaction
 from llm.auto_dashboard import generate_auto_dashboard
+from models.schemas import DashboardAutoRequest
 from sqlite.executor import execute_query
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -41,7 +42,11 @@ def _execute_chart_sync(spec, dataset, schema):
 
 
 @router.post("/auto/{dataset_id}")
-async def auto_generate_dashboard(dataset_id: str, user: dict = Depends(get_current_user)):
+async def auto_generate_dashboard(
+    dataset_id: str,
+    payload: DashboardAutoRequest | None = None,
+    user: dict = Depends(get_current_user),
+):
     dataset = await get_dataset(dataset_id, user["sub"])
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found or access denied")
@@ -53,7 +58,10 @@ async def auto_generate_dashboard(dataset_id: str, user: dict = Depends(get_curr
         "numeric_columns": dataset["numeric_columns"],
         "categorical_columns": dataset["categorical_columns"],
     }
-    chart_specs = generate_auto_dashboard(schema)
+    chart_specs = generate_auto_dashboard(
+        schema,
+        requirements=payload.requirements if payload else None,
+    )
 
     # Execute all chart SQL queries in parallel instead of sequentially
     results = await asyncio.gather(

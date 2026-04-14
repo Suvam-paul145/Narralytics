@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from llm.genai_client import generate_with_retry, _GROQ_MODEL
+from llm.genai_client import generate_with_retry, select_model_for_task
 
 
 def _parse_json_payload(raw: str) -> dict[str, Any]:
@@ -118,7 +118,7 @@ def get_chart_specs(schema: dict[str, Any], prompt: str, history: list[dict[str,
     try:
         response = generate_with_retry(
             client=None,
-            model=_GROQ_MODEL,
+            model=select_model_for_task("query"),
             contents=contents,
         )
         return _parse_json_payload(response.text)
@@ -147,7 +147,7 @@ Keep it professional, punchy, and include actual numbers from the data. Do NOT e
     try:
         response = generate_with_retry(
             client=None,
-            model=_GROQ_MODEL,
+            model=select_model_for_task("insight"),
             contents=[{"role": "user", "parts": [{"text": system_prompt}]}],
         )
         return response.text.replace("\n", " ").strip()

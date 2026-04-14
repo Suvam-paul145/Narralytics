@@ -26,6 +26,13 @@ class Settings(BaseSettings):
 
     # ── LLM Provider (Groq) ──────────────────────────────────────────
     GROQ_API_KEY: str = ""
+    GROQ_MODEL_DEFAULT: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL_FAST: str = "llama-3.1-8b-instant"
+    GROQ_MODEL_DASHBOARD: str = ""
+    GROQ_MODEL_QUERY: str = ""
+    GROQ_MODEL_CHAT: str = ""
+    GROQ_MODEL_INSIGHT: str = ""
+    GROQ_MODEL_REFINE: str = ""
 
     UPLOAD_DIR: str = "/tmp/uploads" if os.getenv("AWS_LAMBDA_FUNCTION_NAME") else "./uploads"
     AWS_REGION: str = "us-east-1"

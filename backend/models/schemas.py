@@ -23,6 +23,10 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
 
 
+class DashboardAutoRequest(BaseModel):
+    requirements: str | None = None
+
+
 class ChartSpec(BaseModel):
     chart_id: str | None = None
     label: str | None = None

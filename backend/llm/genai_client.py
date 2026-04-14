@@ -8,7 +8,7 @@ logic has been replaced by a single Groq API key + simple retry.
 
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 from config import settings
 from llm.quota_manager import quota_manager
@@ -24,7 +24,13 @@ except ImportError:
     _HAS_GROQ = False
 
 # ── Model configuration ──────────────────────────────────────────────
-_GROQ_MODEL = "llama-3.3-70b-versatile"
+_DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+_FAST_GROQ_MODEL = "llama-3.1-8b-instant"
+
+# Backward-compatible constant used by existing imports.
+_GROQ_MODEL = _DEFAULT_GROQ_MODEL
+
+ModelTask = Literal["dashboard", "query", "chat", "insight", "refine", "default"]
 
 # ── Retryable / quota error markers ──────────────────────────────────
 _RETRYABLE_MARKERS = (
@@ -96,6 +102,47 @@ def get_groq_api_key() -> str:
 
 # Legacy aliases — other modules import these
 get_primary_api_key = get_groq_api_key
+
+
+def select_model_for_task(task: ModelTask = "default") -> str:
+    """
+    Select the best Groq model for a specific workload.
+
+    Model can be overridden per task through environment variables:
+    - GROQ_MODEL_DEFAULT
+    - GROQ_MODEL_DASHBOARD
+    - GROQ_MODEL_QUERY
+    - GROQ_MODEL_CHAT
+    - GROQ_MODEL_INSIGHT
+    - GROQ_MODEL_REFINE
+    """
+    default_model = (
+        getattr(settings, "GROQ_MODEL_DEFAULT", "") or _DEFAULT_GROQ_MODEL
+    ).strip()
+    fast_model = (
+        getattr(settings, "GROQ_MODEL_FAST", "") or _FAST_GROQ_MODEL
+    ).strip()
+
+    task_specific = {
+        "dashboard": getattr(settings, "GROQ_MODEL_DASHBOARD", "").strip(),
+        "query": getattr(settings, "GROQ_MODEL_QUERY", "").strip(),
+        "chat": getattr(settings, "GROQ_MODEL_CHAT", "").strip(),
+        "insight": getattr(settings, "GROQ_MODEL_INSIGHT", "").strip(),
+        "refine": getattr(settings, "GROQ_MODEL_REFINE", "").strip(),
+        "default": "",
+    }
+
+    if task_specific.get(task):
+        return task_specific[task]
+
+    # Sensible defaults by workload:
+    # - dashboard/query: higher-quality reasoning + SQL planning
+    # - chat/insight/refine: faster narrative generation
+    if task in {"dashboard", "query"}:
+        return default_model
+    if task in {"chat", "insight", "refine"}:
+        return fast_model
+    return default_model
 
 
 # ── Core Groq call ────────────────────────────────────────────────────
