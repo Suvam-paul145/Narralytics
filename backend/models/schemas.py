@@ -59,6 +59,7 @@ class QueryResponse(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    reason: str | None = None
     supporting_sql: str | None = None
     data_used: list[dict[str, Any]] = Field(default_factory=list)
     charts: list[ChartResult] = Field(default_factory=list)

@@ -6,6 +6,44 @@ from sqlite.loader import generate_column_code
 
 logger = logging.getLogger(__name__)
 
+
+def _quote_sql_literal(value: Any) -> str:
+    """Render a Python value as a safe SQLite literal."""
+    if value is None:
+        return "NULL"
+
+    if isinstance(value, bool):
+        return "1" if value else "0"
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+
+    text = str(value).replace("'", "''")
+    return f"'{text}'"
+
+
+def _clamp_limit(value: Any, default: int = 10, minimum: int = 1, maximum: int = 50) -> int:
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return default
+
+    return max(minimum, min(limit, maximum))
+
+
+def _is_safe_select_sql(sql: str) -> bool:
+    normalized = (sql or "").strip().rstrip(";")
+    lowered = normalized.lower()
+
+    if not lowered.startswith("select"):
+        return False
+    if ";" in normalized:
+        return False
+    if " from data" not in lowered:
+        return False
+
+    return True
+
 def _normalize_identifier(value: str | None, schema: Dict[str, Any]) -> str | None:
     """Map a raw column label from the LLM to the normalized SQLite column code.
 
@@ -41,7 +79,9 @@ def generate_sql_from_structured_json(json_spec: dict, schema: dict) -> str:
     agg = str(json_spec.get("aggregation", "sum")).upper()
     group_by = _normalize_identifier(json_spec.get("groupBy"), schema)
     filters = json_spec.get("filters", {})
-    limit = json_spec.get("limit", 10)
+    chart_type = str(json_spec.get("chartType") or json_spec.get("chart_type") or "bar").lower()
+    sort_direction = str(json_spec.get("sort", "desc")).lower()
+    limit = _clamp_limit(json_spec.get("limit", 10))
 
     # Reject invalid specs instead of injecting hardcoded visuals.
     if not x_axis or not y_axis:
@@ -50,27 +90,31 @@ def generate_sql_from_structured_json(json_spec: dict, schema: dict) -> str:
     if agg not in ["SUM", "COUNT", "AVG", "MIN", "MAX"]:
         agg = "SUM"
 
-    select_clause = f'"{x_axis}", ROUND({agg}("{y_axis}"), 2) AS "{y_axis}"'
+    aggregate_expr = f'{agg}("{y_axis}")'
+    if agg != "COUNT":
+        aggregate_expr = f"ROUND({aggregate_expr}, 2)"
+
+    select_clause = f'"{x_axis}", {aggregate_expr} AS "{y_axis}"'
     group_clause = f'GROUP BY "{x_axis}"'
     
     if group_by and group_by != x_axis:
-        select_clause = f'"{x_axis}", "{group_by}", ROUND({agg}("{y_axis}"), 2) AS "{y_axis}"'
+        select_clause = f'"{x_axis}", "{group_by}", {aggregate_expr} AS "{y_axis}"'
         group_clause = f'GROUP BY "{x_axis}", "{group_by}"'
+
+    if not isinstance(filters, dict):
+        filters = {}
 
     where_clauses = []
     for k, v in filters.items():
         safe_key = _normalize_identifier(k, schema) or generate_column_code(str(k))
-        if isinstance(v, str):
-            where_clauses.append(f'"{safe_key}" = "{v}"')
-        else:
-            where_clauses.append(f'"{safe_key}" = {v}')
+        where_clauses.append(f'"{safe_key}" = {_quote_sql_literal(v)}')
     
     where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-    order_clause = f'ORDER BY "{y_axis}" DESC'
-    limit_clause = f"LIMIT {int(limit)}" if limit else "LIMIT 10"
+    order_clause = f'ORDER BY "{y_axis}" {"ASC" if sort_direction == "asc" else "DESC"}'
+    limit_clause = f"LIMIT {limit}"
     
     # Pie charts MUST include LIMIT 6
-    if json_spec.get("chartType") == "pie":
+    if chart_type == "pie":
         limit_clause = "LIMIT 6"
 
     sql = f"SELECT {select_clause} FROM data {where_str} {group_clause} {order_clause} {limit_clause}"
@@ -94,7 +138,15 @@ def convert_llm_json_to_chart_spec(options: list[dict], schema: dict) -> list[di
                 logger.warning("Skipping option with unresolved axes: %s", json.dumps(opt))
                 continue
 
-            sql = opt.get("sql") or generate_sql_from_structured_json(opt, schema)
+            try:
+                # Prefer deterministic SQL whenever the LLM gave us a structured spec.
+                sql = generate_sql_from_structured_json(opt, schema)
+            except ValueError:
+                raw_sql = str(opt.get("sql") or "").strip()
+                if not _is_safe_select_sql(raw_sql):
+                    logger.warning("Skipping option with unsafe SQL: %s", json.dumps(opt))
+                    continue
+                sql = raw_sql
 
             # ECharts compatible mapping + trick for dynamic distinct colors
             # The frontend assigns different colors based on `color_by` 

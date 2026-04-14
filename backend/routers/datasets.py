@@ -6,6 +6,13 @@ from pathlib import Path
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from analytics.dataset_profile import (
+    build_dataset_profile,
+    clean_uploaded_dataframe,
+    extract_embedded_csv_text,
+    is_suspicious_dataframe,
+    parse_csv_text,
+)
 from auth.dependencies import get_current_user
 from config import settings
 from database.datasets import delete_dataset_meta, get_dataset, get_user_datasets, save_dataset_metadata
@@ -19,17 +26,50 @@ router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 import chardet
 
+
+def _decode_bytes(content: bytes, preferred_encoding: str | None = None) -> str:
+    attempted_encodings = [
+        preferred_encoding,
+        "utf-8",
+        "utf-8-sig",
+        "latin1",
+    ]
+    for encoding in attempted_encodings:
+        if not encoding:
+            continue
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="ignore")
+
+
+def _read_csv_dataframe(content: bytes) -> pd.DataFrame:
+    detection = chardet.detect(content)
+    encoding = detection.get("encoding", "utf-8")
+    decoded_text = _decode_bytes(content, encoding)
+
+    try:
+        dataframe = parse_csv_text(decoded_text)
+    except Exception:
+        dataframe = pd.read_csv(BytesIO(content), encoding=encoding)
+
+    if is_suspicious_dataframe(dataframe):
+        extracted_csv = extract_embedded_csv_text(content)
+        if extracted_csv:
+            recovered = parse_csv_text(extracted_csv)
+            if not recovered.empty:
+                dataframe = recovered
+
+    return dataframe
+
+
 def _parse_uploaded_dataframe(filename: str, content: bytes) -> pd.DataFrame:
     suffix = Path(filename).suffix.lower()
     
     # --- Binary signature protection ---
-    # Check for Apple Binary Plist (bplist00), WebArchive, or Zip (PK\x03\x04) misidentified as CSV
+    # Check for Zip (PK\x03\x04) misidentified as CSV
     head = content[:2048]
-    if b"bplist00" in head or b"WebMainResource" in head or b"Mac OS X" in head:
-        raise HTTPException(
-            status_code=422, 
-            detail="The file appears to be a Binary Plist or WebArchive. Only valid CSV and Excel files are supported."
-        )
     if suffix == ".csv" and head.startswith(b"PK\x03\x04"):
         raise HTTPException(
             status_code=422,
@@ -46,17 +86,7 @@ def _parse_uploaded_dataframe(filename: str, content: bytes) -> pd.DataFrame:
     buffer = BytesIO(content)
     try:
         if suffix == ".csv":
-            # 1. Detect encoding accurately
-            detection = chardet.detect(content)
-            encoding = detection.get("encoding", "utf-8")
-            
-            try:
-                # 2. Try reading with detected encoding
-                return pd.read_csv(buffer, encoding=encoding)
-            except (UnicodeDecodeError, pd.errors.ParserError):
-                # 3. Fallback to latin1 if still failing
-                buffer.seek(0)
-                return pd.read_csv(buffer, encoding="latin1")
+            return _read_csv_dataframe(content)
         
         # Excel handling (read_excel handles its own binary detection)
         return pd.read_excel(buffer)
@@ -72,7 +102,12 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
     dataset_id = str(uuid.uuid4())
     content = await file.read()
     dataframe = _parse_uploaded_dataframe(file.filename, content)
+    dataframe, cleaning_report = clean_uploaded_dataframe(dataframe)
+    if dataframe.empty or len(dataframe.columns) == 0:
+        raise HTTPException(status_code=422, detail="No usable tabular data was found in the uploaded file.")
+
     schema = detect_schema(dataframe)
+    profile = build_dataset_profile(schema, file.filename)
 
     extension = Path(file.filename).suffix.lower() or ".csv"
     stored_filename = f"{dataset_id}{extension}"
@@ -99,6 +134,8 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
         "db_path": db_path,
         "source_file_path": source_file_path,
         "file_size_bytes": len(content),
+        "profile": profile,
+        "cleaning_report": cleaning_report,
     }
     await save_dataset_metadata(metadata)
     await add_dataset_to_user(
@@ -110,6 +147,7 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
             "columns": [column["name"] for column in schema["columns"]],
             "column_codes": schema["column_codes"],
             "db_path": db_path,
+            "profile": profile,
         },
     )
 
@@ -123,6 +161,8 @@ async def upload_dataset(file: UploadFile = File(...), user: dict = Depends(get_
         "date_column_codes": schema["date_column_codes"],
         "numeric_columns": schema["numeric_columns"],
         "numeric_column_codes": schema["numeric_column_codes"],
+        "profile": profile,
+        "cleaning_report": cleaning_report,
         "message": "Dataset ready. Generating dashboard...",
     }
 
@@ -147,3 +187,16 @@ async def delete_dataset(dataset_id: str, user: dict = Depends(get_current_user)
     await delete_dataset_meta(dataset_id, user["sub"])
     await remove_dataset_from_user(user["sub"], dataset_id)
     return {"message": "Dataset deleted"}
+
+
+@router.get("/{dataset_id}/profile")
+async def get_dataset_profile(dataset_id: str, user: dict = Depends(get_current_user)):
+    dataset = await get_dataset(dataset_id, user["sub"])
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    return {
+        "dataset_id": dataset_id,
+        "profile": dataset.get("profile", {}),
+        "cleaning_report": dataset.get("cleaning_report", {}),
+    }

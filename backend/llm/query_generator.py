@@ -1,7 +1,7 @@
 import json
 import logging
 
-from llm.genai_client import generate_with_retry, get_primary_api_key, select_model_for_task
+from llm.genai_client import generate_json_with_retry, get_primary_api_key
 from llm.quota_manager import quota_manager
 
 logger = logging.getLogger(__name__)
@@ -150,6 +150,37 @@ If impossible with available columns, return exactly:
 """
 
 
+QUERY_SPEC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "cannot_answer": {"type": "boolean"},
+        "reason": {"type": ["string", "null"]},
+        "options": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "chartType": {"type": "string", "enum": ["bar", "line", "pie", "scatter", "area"]},
+                    "xAxis": {"type": "string"},
+                    "yAxis": {"type": "string"},
+                    "aggregation": {"type": "string", "enum": ["sum", "avg", "count", "min", "max", "SUM", "AVG", "COUNT", "MIN", "MAX"]},
+                    "groupBy": {"type": ["string", "null"]},
+                    "filters": {"type": "object"},
+                    "sort": {"type": "string", "enum": ["asc", "desc"]},
+                    "limit": {"type": ["integer", "null"]},
+                    "title": {"type": "string"},
+                    "insight": {"type": "string"},
+                },
+                "required": ["chartType", "xAxis", "yAxis", "aggregation", "groupBy", "filters", "sort", "limit", "title", "insight"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["cannot_answer"],
+    "additionalProperties": False,
+}
+
+
 def generate_query_spec(
     enhanced_prompt: str,
     schema: dict,
@@ -189,10 +220,11 @@ def generate_query_spec(
 
     try:
         logger.info("[query_generator] Requesting LLM for schema query")
-        response = generate_with_retry(
-            client=None,
-            model=select_model_for_task("query"),
+        _, response = generate_json_with_retry(
+            task="query",
             contents=contents,
+            schema_name="query_spec",
+            schema=QUERY_SPEC_SCHEMA,
         )
         quota_manager.record_request(primary_key)
         raw = response.text

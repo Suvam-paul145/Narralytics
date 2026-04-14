@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from analytics.aggregation_engine import normalize_chart_result
+from analytics.deterministic_engine import plan_rule_based_query, summarize_chart_data
 from auth.dependencies import get_current_user
 from database.datasets import get_dataset, touch_dataset
 from database.history import (
@@ -53,6 +54,109 @@ async def business_chat(request: ChatRequest, user: dict = Depends(get_current_u
         "categorical_columns": dataset["categorical_columns"],
     }
     history = [turn.model_dump() for turn in request.history]
+    deterministic_plan = plan_rule_based_query(request.message, schema)
+
+    if deterministic_plan.get("invalid"):
+        reason = deterministic_plan.get("reason") or "The query is not relevant to the uploaded dataset."
+        await save_interaction(
+            user["sub"],
+            "chat",
+            {
+                "dataset_id": request.dataset_id,
+                "prompt": request.message,
+                "response_summary": "cannot_answer (deterministic validator)",
+                "was_forecast": False,
+                "reason": reason,
+            },
+            dataset_id=request.dataset_id,
+            session_id=request.session_id,
+        )
+        return ChatResponse(answer=reason, cannot_answer=True, reason=reason)
+
+    if deterministic_plan.get("matched"):
+        supporting_sql = None
+        data_used = []
+        charts: list[ChartResult] = []
+
+        try:
+            for spec_payload in deterministic_plan.get("specs", []):
+                supporting_sql = spec_payload.get("sql")
+                if not supporting_sql:
+                    continue
+
+                raw_rows = execute_query(dataset["db_path"], supporting_sql)
+                normalized_spec_payload, chart_data = normalize_chart_result(
+                    spec=spec_payload,
+                    rows=raw_rows,
+                    schema=schema,
+                )
+                chart_spec = ChartSpec(**normalized_spec_payload)
+                if chart_data:
+                    chart_spec.insight = summarize_chart_data(
+                        question=request.message,
+                        chart_title=chart_spec.title,
+                        chart_type=chart_spec.chart_type,
+                        data=chart_data,
+                        x_key=chart_spec.x_key,
+                        y_key=chart_spec.y_key,
+                    )
+
+                charts.append(
+                    ChartResult(spec=chart_spec, data=chart_data, raw_sql=supporting_sql)
+                )
+                if not data_used:
+                    data_used = raw_rows[:10]
+        except Exception as exc:
+            await save_interaction(
+                user["sub"],
+                "chat",
+                {
+                    "dataset_id": request.dataset_id,
+                    "prompt": request.message,
+                    "response_summary": "deterministic execution failed",
+                    "was_forecast": False,
+                    "reason": str(exc),
+                },
+                dataset_id=request.dataset_id,
+                session_id=request.session_id,
+            )
+            return ChatResponse(
+                answer="The query matched your dataset, but the analysis could not be executed safely.",
+                cannot_answer=True,
+                reason=str(exc),
+            )
+
+        answer = (
+            charts[0].spec.insight
+            if charts and charts[0].spec.insight
+            else "The query matched your dataset and the chart has been generated."
+        )
+
+        await touch_dataset(request.dataset_id)
+        await save_interaction(
+            user["sub"],
+            "chat",
+            {
+                "dataset_id": request.dataset_id,
+                "prompt": request.message,
+                "response_summary": answer[:400],
+                "sql_generated": supporting_sql,
+                "output_count": len(charts),
+                "was_forecast": False,
+                "planner": "deterministic",
+            },
+            dataset_id=request.dataset_id,
+            session_id=request.session_id,
+        )
+
+        return ChatResponse(
+            answer=answer,
+            supporting_sql=supporting_sql,
+            data_used=data_used,
+            charts=charts,
+            cannot_answer=False,
+        )
+
     chat_result = get_chat_response(schema, dataset["original_filename"], request.message, history)
 
     if chat_result.get("cannot_answer"):
@@ -72,6 +176,7 @@ async def business_chat(request: ChatRequest, user: dict = Depends(get_current_u
         return ChatResponse(
             answer=f"I do not have enough data to answer that question. {chat_result.get('reason', '')}".strip(),
             cannot_answer=True,
+            reason=chat_result.get("reason"),
         )
 
     answer = chat_result.get("answer", "")

@@ -20,19 +20,9 @@ import {
 import API_BASE_URL from "../config/api";
 import { useAuth } from "../context/AuthContext";
 import { CHART_COLORS } from "../utils/chartColors";
-import { detectQueryPattern, isDatasetRelevantToQuery, matchQuery } from "../utils/queryMatcher";
 
 const API_BASE = API_BASE_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
 const SUPPORTED_CHARTS = new Set(["bar", "line", "pie", "scatter", "area"]);
-const PIPELINE_DURATION_MS = 2000;
-const PIPELINE_TRACKS = [
-  { id: "preprocess", label: "Pre-processing Data", start: 0.0, end: 0.62, color: "#38bdf8" },
-  { id: "reasoning", label: "Reasoning Engine", start: 0.08, end: 0.86, color: "#5b6af9" },
-  { id: "llm_a", label: "LLM Worker A", start: 0.16, end: 0.9, color: "#a78bfa" },
-  { id: "llm_b", label: "LLM Worker B", start: 0.16, end: 0.9, color: "#f59e0b" },
-  { id: "chart", label: "Chart Composer", start: 0.42, end: 0.96, color: "#2dd4a0" },
-  { id: "response", label: "Response Synthesis", start: 0.72, end: 1.0, color: "#f97316" },
-];
 
 const SUGGESTION_CHIPS = [
   "Show top 5 regions by total revenue",
@@ -48,7 +38,6 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const ERROR_NO_DATASET = "Please upload a dataset first (CSV or Excel) so I can analyze your data.";
 const ERROR_BACKEND_FAIL = "Something went wrong while processing your query. Please try rephrasing or check if the server is running.";
 const ERROR_NO_RESULTS = "No results were returned for this query. Try rephrasing your question or check if the dataset has the relevant columns.";
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const getAuthHeaders = (json = false) => {
   const token = localStorage.getItem("authToken");
@@ -82,21 +71,6 @@ const fetchJsonWithTimeout = async (url, options = {}, timeoutMs = 30000) => {
   } finally {
     clearTimeout(timeoutId);
   }
-};
-
-const buildPipelineState = (normalizedProgress) => {
-  const progress = clamp(normalizedProgress, 0, 1);
-  const tracks = PIPELINE_TRACKS.map((track) => {
-    const local = clamp((progress - track.start) / (track.end - track.start), 0, 1);
-    const percent = Math.round(local * 100);
-    const status = percent >= 100 ? "done" : percent > 0 ? "running" : "queued";
-    return { ...track, percent, status };
-  });
-
-  return {
-    progress: Math.round(progress * 100),
-    tracks,
-  };
 };
 
 const normalizeChartPayload = (rawChart) => {
@@ -437,8 +411,6 @@ export default function Chat() {
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const pipelineIntervalRef = useRef(null);
-  const pipelineTimeoutRef = useRef(null);
 
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [sessions, setSessions] = useState([]);
@@ -455,11 +427,17 @@ export default function Chat() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [pipelineState, setPipelineState] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
 
   const hasMessages = messages.length > 0;
+  const suggestionChips = useMemo(() => {
+    const dynamic = dataset?.profile?.recommended_questions;
+    if (Array.isArray(dynamic) && dynamic.length > 0) {
+      return dynamic.slice(0, 6);
+    }
+    return SUGGESTION_CHIPS;
+  }, [dataset]);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -491,6 +469,8 @@ export default function Chat() {
             filename: match.name || fallbackName || "Attached Dataset",
             columns: Array.isArray(match.columns) ? match.columns : [],
             row_count: match.row_count,
+            profile: match.profile || null,
+            cleaning_report: match.cleaning_report || null,
           };
         }
       }
@@ -502,6 +482,8 @@ export default function Chat() {
       dataset_id: datasetId,
       filename: fallbackName || "Attached Dataset",
       columns: [],
+      profile: null,
+      cleaning_report: null,
     };
   }, []);
 
@@ -551,58 +533,6 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
-
-  useEffect(
-    () => () => {
-      if (pipelineIntervalRef.current) {
-        clearInterval(pipelineIntervalRef.current);
-      }
-      if (pipelineTimeoutRef.current) {
-        clearTimeout(pipelineTimeoutRef.current);
-      }
-    },
-    [],
-  );
-
-  const runDummyPipeline = useCallback(() => {
-    if (pipelineIntervalRef.current) {
-      clearInterval(pipelineIntervalRef.current);
-      pipelineIntervalRef.current = null;
-    }
-    if (pipelineTimeoutRef.current) {
-      clearTimeout(pipelineTimeoutRef.current);
-      pipelineTimeoutRef.current = null;
-    }
-
-    const startedAt = Date.now();
-    setPipelineState(buildPipelineState(0));
-
-    return new Promise((resolve) => {
-      let completed = false;
-      const finalize = () => {
-        if (completed) return;
-        completed = true;
-        if (pipelineIntervalRef.current) {
-          clearInterval(pipelineIntervalRef.current);
-          pipelineIntervalRef.current = null;
-        }
-        if (pipelineTimeoutRef.current) {
-          clearTimeout(pipelineTimeoutRef.current);
-          pipelineTimeoutRef.current = null;
-        }
-        setPipelineState(buildPipelineState(1));
-        resolve();
-      };
-
-      pipelineIntervalRef.current = setInterval(() => {
-        const elapsed = Date.now() - startedAt;
-        const normalized = clamp(elapsed / PIPELINE_DURATION_MS, 0, 0.99);
-        setPipelineState(buildPipelineState(normalized));
-      }, 80);
-
-      pipelineTimeoutRef.current = setTimeout(finalize, PIPELINE_DURATION_MS);
-    });
-  }, []);
 
   const upsertSessionMeta = useCallback(async ({ sessionId, title, datasetId, datasetName }) => {
     try {
@@ -782,23 +712,11 @@ export default function Chat() {
       setMessages((previous) => [...previous, userMessage]);
       setQuery("");
       setIsLoading(true);
-      const pipelinePromise = runDummyPipeline();
       const pattern = null;
 
       const complete = async (aiMessage, exchangeMeta = {}) => {
-        // Show response immediately — don't block on animation
         setMessages((previous) => [...previous, aiMessage]);
         setIsLoading(false);
-        setPipelineState(null);
-        // Cancel any remaining animation timers
-        if (pipelineIntervalRef.current) {
-          clearInterval(pipelineIntervalRef.current);
-          pipelineIntervalRef.current = null;
-        }
-        if (pipelineTimeoutRef.current) {
-          clearTimeout(pipelineTimeoutRef.current);
-          pipelineTimeoutRef.current = null;
-        }
         void persistExchange({ sessionId, userMessage, aiMessage, exchangeMeta });
       };
 
@@ -884,6 +802,9 @@ export default function Chat() {
           aiMessage.content = chatPayload?.reason || queryPayload?.reason || ERROR_NO_RESULTS;
           aiMessage.charts = [];
           aiMessage.meta = { ...aiMessage.meta, mode: "cannot_answer" };
+        } else if ((!aiMessage.content || chatPayload?.cannot_answer) && mergedCharts.length > 0) {
+          aiMessage.content = mergedCharts[0]?.insight || "I generated the relevant chart from your dataset.";
+          aiMessage.meta = { ...aiMessage.meta, mode: "chart_backed" };
         } else if (!aiMessage.content && mergedCharts.length === 0) {
           // No text and no charts at all — generic fallback
           aiMessage.content = ERROR_NO_RESULTS;
@@ -910,7 +831,6 @@ export default function Chat() {
       messages,
       persistExchange,
       query,
-      runDummyPipeline,
       upsertSessionMeta,
     ],
   );
@@ -943,6 +863,11 @@ export default function Chat() {
         }
 
         body { margin: 0; }
+
+        @keyframes pulse-border {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.55; transform: scale(1.18); }
+        }
 
         @media (max-width: 900px) {
           .chat-session-title { font-size: 0.74rem !important; }
@@ -1118,13 +1043,13 @@ export default function Chat() {
 
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 10px", display: "flex", flexDirection: "column", gap: 12 }}>
             {!hasMessages && (
-              <div style={{ margin: "auto", maxWidth: 700, textAlign: "center", display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+              <div style={{ margin: "48px auto auto", maxWidth: 700, textAlign: "center", display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
                 <h2 style={{ margin: 0, fontFamily: "'DM Serif Display', serif", fontSize: "clamp(1.8rem,4vw,2.8rem)", fontWeight: 400, lineHeight: 1.15 }}>Ask your analytics question.</h2>
                 <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "0.9rem", maxWidth: 540, lineHeight: 1.6 }}>
-                  Deterministic query matching powers instant chart responses for the demo. When a query is outside the matcher scope, Narralytics falls back to the backend AI pipeline.
+                  {dataset?.profile?.summary || "Narralytics sends your question to the backend analytics pipeline, where Groq generates chart plans and answers directly from your uploaded dataset."}
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                  {SUGGESTION_CHIPS.map((chip) => (
+                  {suggestionChips.map((chip) => (
                     <button
                       key={chip}
                       style={{
@@ -1155,69 +1080,27 @@ export default function Chat() {
                     borderRadius: 14,
                     border: "1px solid var(--border)",
                     background: "var(--bg-card)",
-                    width: "min(560px, 90%)",
-                    padding: "12px 14px",
+                    width: "min(520px, 90%)",
+                    padding: "14px 16px",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text)", fontWeight: 600 }}>
-                      Thinking • Reasoning • Pre-processing
-                    </div>
-                    <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                      {pipelineState?.progress ?? 0}%
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      width: "100%",
-                      height: 7,
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,0.08)",
-                      overflow: "hidden",
-                      marginBottom: 10,
-                    }}
-                  >
-                    <div
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span
                       style={{
-                        height: "100%",
-                        width: `${pipelineState?.progress ?? 0}%`,
-                        background: "linear-gradient(90deg,#5b6af9,#a78bfa,#2dd4a0)",
-                        transition: "width 0.12s linear",
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: "var(--accent)",
+                        boxShadow: "0 0 18px rgba(91,106,249,0.65)",
+                        animation: "pulse-border 1.5s infinite",
                       }}
                     />
+                    <div style={{ fontSize: "0.82rem", color: "var(--text)", fontWeight: 600 }}>
+                      Analyzing your dataset
+                    </div>
                   </div>
-
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {(pipelineState?.tracks || PIPELINE_TRACKS.map((track) => ({ ...track, percent: 0, status: "queued" }))).map((track) => (
-                      <div key={track.id}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ fontSize: "0.71rem", color: "var(--text-muted)" }}>{track.label}</span>
-                          <span style={{ fontSize: "0.68rem", color: track.color, fontFamily: "var(--font-mono)" }}>
-                            {track.status === "done" ? "done" : track.status === "running" ? "running" : "queued"}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            width: "100%",
-                            height: 5,
-                            borderRadius: 999,
-                            background: "rgba(255,255,255,0.06)",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: "100%",
-                              width: `${track.percent}%`,
-                              background: track.color,
-                              opacity: track.percent > 0 ? 1 : 0.45,
-                              transition: "width 0.12s linear",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ fontSize: "0.77rem", color: "var(--text-muted)", lineHeight: 1.65 }}>
+                    Narralytics is checking the uploaded schema, generating the answer, and preparing the chart if your question matches the dataset.
                   </div>
                 </div>
               </div>
@@ -1225,7 +1108,7 @@ export default function Chat() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div style={{ padding: "10px 20px 20px", display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border)", background: "var(--bg)", zIndex: 10 }}>
+          <div style={{ padding: "8px 20px 16px", display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--border)", background: "var(--bg)", zIndex: 10 }}>
             {/* Dataset chip / upload progress */}
             {(dataset || uploading) && (
               <div className="chat-meta-row" style={{ justifyContent: "space-between", width: "100%" }}>
@@ -1340,20 +1223,21 @@ export default function Chat() {
               </div>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              {uploading && (
-                <div style={{ borderRadius: 999, border: "1px solid var(--border)", background: "var(--bg-card)", padding: "6px 11px", fontSize: "0.73rem", display: "inline-flex", alignItems: "center", gap: 7, color: "var(--text-muted)" }}>
-                  <span>{uploadProgress}%</span>
-                  <strong style={{ color: "var(--text)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{uploadFilename}</strong>
-                </div>
-              )}
-              {dataset && !uploading && (
-                <div style={{ borderRadius: 999, border: "1px solid var(--border)", background: "var(--bg-card)", padding: "6px 11px", fontSize: "0.73rem", display: "inline-flex", alignItems: "center", gap: 7, color: "var(--text-muted)" }}>
-                  <span>Dataset</span>
-                  <strong style={{ color: "var(--text)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{dataset.filename || "Attached Dataset"}</strong>
-                </div>
-              )}
-            </div>
+            {!!uploadError && (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,107,138,0.28)",
+                  background: "rgba(255,107,138,0.08)",
+                  color: "#ff9eb3",
+                  fontSize: "0.78rem",
+                  padding: "10px 12px",
+                  lineHeight: 1.55,
+                }}
+              >
+                {uploadError}
+              </div>
+            )}
 
             <div
               style={{
@@ -1460,7 +1344,7 @@ export default function Chat() {
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {SUGGESTION_CHIPS.map((chip) => (
+              {suggestionChips.map((chip) => (
                 <button
                   key={`footer-${chip}`}
                   style={{ border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)", borderRadius: 999, padding: "8px 13px", fontSize: "0.77rem", cursor: "pointer" }}

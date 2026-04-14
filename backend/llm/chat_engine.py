@@ -2,11 +2,31 @@ import json
 import logging
 from typing import Dict, List
 
-from llm.genai_client import generate_with_retry, get_primary_api_key, select_model_for_task
+from llm.genai_client import (
+    generate_json_with_retry,
+    generate_with_retry,
+    get_primary_api_key,
+    select_model_for_task,
+)
 from llm.quota_manager import quota_manager
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
+
+
+CHAT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "cannot_answer": {"type": "boolean"},
+        "answer": {"type": "string"},
+        "supporting_sql": {"type": ["string", "null"]},
+        "needs_data": {"type": "boolean"},
+        "needs_forecast": {"type": "boolean"},
+        "reason": {"type": ["string", "null"]},
+    },
+    "required": ["cannot_answer", "answer", "supporting_sql", "needs_data", "needs_forecast"],
+    "additionalProperties": False,
+}
 
 
 class ChatEngineError(Exception):
@@ -174,10 +194,11 @@ def get_chat_response(
             "parts": [{"text": f"{system_prompt}\n\nUser: {message}"}]
         })
 
-        response = generate_with_retry(
-            client=None,
-            model=select_model_for_task("chat"),
-            contents=contents
+        _, response = generate_json_with_retry(
+            task="chat",
+            contents=contents,
+            schema_name="chat_response",
+            schema=CHAT_RESPONSE_SCHEMA,
         )
         quota_manager.record_request(primary_key)
         

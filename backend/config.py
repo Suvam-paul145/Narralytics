@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     @field_validator("GROQ_API_KEY", mode="before")
     @classmethod
     def strip_api_keys(cls, value: Any) -> str:
+        # Accept either GROQ_API_KEY or GROK_API_KEY (common naming slip for xAI Grok).
+        if (value is None or str(value).strip() == "") and os.getenv("GROK_API_KEY"):
+            value = os.getenv("GROK_API_KEY")
         if value is None:
             return ""
         if isinstance(value, str):
