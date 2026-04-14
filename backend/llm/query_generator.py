@@ -1,8 +1,6 @@
 import json
 import logging
-from functools import lru_cache
 
-from config import settings
 from llm.genai_client import _GROQ_MODEL, generate_with_retry, get_primary_api_key
 from llm.quota_manager import quota_manager
 
@@ -11,82 +9,13 @@ logger = logging.getLogger(__name__)
 
 def _generate_guaranteed_fallback(enhanced_prompt: str, schema: dict) -> dict:
     """
-    Last resort: Generate at least ONE valid chart without relying on LLM.
-    Used when LLM fails, quota exhausted, or data is insufficient.
+    If the LLM fails completely, do not hallucinate a fake chart.
+    Just return an honest error so the frontend can inform the user.
     """
-    # Prefer normalized codes to align with SQLite column names
-    numeric_cols = schema.get("numeric_column_codes") or schema.get("numeric_columns", [])
-    categorical_cols = schema.get("categorical_column_codes") or schema.get("categorical_columns", [])
-    date_cols = schema.get("date_column_codes") or schema.get("date_columns", [])
-    
-    # If we have numeric + categorical, always generate a bar chart
-    if numeric_cols and categorical_cols:
-        return {
-            "cannot_answer": False,
-            "options": [
-                {
-                    "chartType": "bar",
-                    "xAxis": categorical_cols[0],
-                    "yAxis": numeric_cols[0],
-                    "aggregation": "SUM",
-                    "groupBy": None,
-                    "filters": {},
-                    "limit": 10,
-                    "title": f"{numeric_cols[0].title()} by {categorical_cols[0].title()}",
-                    "insight": "Overview of key metrics"
-                }
-            ]
-        }
-    
-    # If we have date + numeric, generate a line chart
-    if date_cols and numeric_cols:
-        return {
-            "cannot_answer": False,
-            "options": [
-                {
-                    "chartType": "line",
-                    "xAxis": date_cols[0],
-                    "yAxis": numeric_cols[0],
-                    "aggregation": "SUM",
-                    "groupBy": None,
-                    "filters": {},
-                    "limit": 100,
-                    "title": f"{numeric_cols[0].title()} Trend",
-                    "insight": "Trend analysis over time"
-                }
-            ]
-        }
-    
-    # If we ONLY have numeric, generate distribution
-    if numeric_cols:
-        return {
-            "cannot_answer": False,
-            "options": [
-                {
-                    "chartType": "bar",
-                    "xAxis": numeric_cols[0],
-                    "yAxis": numeric_cols[1] if len(numeric_cols) > 1 else numeric_cols[0],
-                    "aggregation": "COUNT",
-                    "groupBy": None,
-                    "filters": {},
-                    "limit": 10,
-                    "title": f"Distribution of {numeric_cols[0].title()}",
-                    "insight": "Data distribution"
-                }
-            ]
-        }
-    
-    # Absolute fallback
     return {
         "cannot_answer": True,
-        "reason": "Dataset has no analyzable columns (no numeric or categorical data)"
+        "reason": "Failed to generate a valid chart using the AI model."
     }
-
-
-@lru_cache(maxsize=1)
-def _get_client():
-    # Backwards compatibility: generate_with_retry is Gemini-only now.
-    return None
 
 
 def _clean_json(raw: str) -> str:
@@ -96,10 +25,11 @@ def _clean_json(raw: str) -> str:
         text = parts[1] if len(parts) > 1 else text
         if text.startswith("json"):
             text = text[4:].strip()
+    # Find outermost { ... }
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
-        return text[start : end + 1]
+        return text[start : end + 1]  # type: ignore
     return text
 
 
@@ -239,24 +169,30 @@ def generate_query_spec(
 
     history_text = ""
     if history:
-        for turn in history[-6:]:
+        for turn in history[-6:]:  # type: ignore
             role = turn.get("role", "user").upper()
             history_text += f"\n{role}: {turn.get('content', '')}"
 
-    full_prompt = f"{system_prompt}\n\n=== HISTORY ===\n{history_text}\n\n=== INSTRUCTION ===\n{enhanced_prompt}"
+    full_prompt = (
+        f"{system_prompt}\n"
+        f"\n=== RECENT CONVERSATION ===\n"
+        f"{history_text or '(no prior context)'}\n"
+        f"\n=== INSTRUCTION ===\n"
+        f"{enhanced_prompt}"
+    )
 
+    contents = [{"role": "user", "parts": [{"text": full_prompt}]}]
     primary_key = get_primary_api_key()
     if not quota_manager.is_quota_available(primary_key):
         logger.warning("[query_generator] Quota exhausted - using guaranteed fallback")
         return _generate_guaranteed_fallback(enhanced_prompt, schema)
 
     try:
-        client = _get_client()
         logger.info("[query_generator] Requesting LLM for schema query")
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
-            contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
+            contents=contents,
         )
         quota_manager.record_request(primary_key)
         raw = response.text

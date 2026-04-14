@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -16,7 +18,16 @@ except ImportError:
     print("⚠️  Mangum not available - AWS Lambda deployment not supported")
     Mangum = None
 
-app = FastAPI(title="Narralytics API", version="2.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage startup and shutdown lifecycle events."""
+    await connect_mongodb()
+    yield
+    await close_mongodb()
+
+
+app = FastAPI(title="Narralytics API", version="2.0.0", lifespan=lifespan)
 
 # Build allowed origins from both FRONTEND_URL and FRONTEND_ORIGINS
 _origins = [settings.FRONTEND_URL]
@@ -37,16 +48,6 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup() -> None:
-    await connect_mongodb()
-
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
-    await close_mongodb()
-
-
 @app.get("/health", tags=["system"])
 async def health() -> dict:
     return {"status": "ok"}
@@ -59,7 +60,7 @@ async def api_health() -> dict:
     - Server is running
     - MongoDB connection is active
     - System timestamp
-    - Gemini API quota status
+    - LLM API (Groq) quota status
     """
     from llm.quota_manager import quota_manager
     
@@ -69,7 +70,7 @@ async def api_health() -> dict:
         "services": {
             "api": "healthy",
             "database": "unknown",
-            "gemini_quota": "unknown"
+            "llm_quota": "unknown"
         }
     }
     
@@ -90,20 +91,20 @@ async def api_health() -> dict:
         health_status["services"]["database"] = f"error: {str(e)}"
         health_status["status"] = "degraded"
     
-    # Check Gemini API quota status
+    # Check LLM API (Groq) quota status
     try:
         quota_available = quota_manager.is_quota_available()
         if quota_available:
-            health_status["services"]["gemini_quota"] = "available"
-            health_status["gemini_requests_used"] = quota_manager.daily_requests
+            health_status["services"]["llm_quota"] = "available"
+            health_status["llm_requests_used"] = quota_manager.daily_requests
         else:
-            health_status["services"]["gemini_quota"] = "exhausted"
-            health_status["gemini_requests_used"] = quota_manager.daily_requests
+            health_status["services"]["llm_quota"] = "exhausted"
+            health_status["llm_requests_used"] = quota_manager.daily_requests
             health_status["quota_reset_time"] = quota_manager.quota_exhausted_until.isoformat() if quota_manager.quota_exhausted_until else None
             if health_status["status"] == "healthy":
                 health_status["status"] = "limited"  # Still functional but with limitations
     except Exception as e:
-        health_status["services"]["gemini_quota"] = f"error: {str(e)}"
+        health_status["services"]["llm_quota"] = f"error: {str(e)}"
     
     return health_status
 

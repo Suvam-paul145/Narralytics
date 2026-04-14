@@ -1,26 +1,36 @@
-import re
+"""
+Groq LLM client — unified generation layer for Narralytics.
+
+All AI modules (chart_engine, chat_engine, auto_dashboard, etc.) call
+``generate_with_retry()`` from this module.  The old Gemini key-rotation
+logic has been replaced by a single Groq API key + simple retry.
+"""
+
+import logging
 import time
-from itertools import cycle
-from threading import Lock
 from typing import Any
 
 from config import settings
 from llm.quota_manager import quota_manager
 
+logger = logging.getLogger(__name__)
+
 try:
-    from google import genai
+    from groq import Groq
 
-    _HAS_GEMINI = True
-except Exception:
-    genai = None  # type: ignore
-    _HAS_GEMINI = False
+    _HAS_GROQ = True
+except ImportError:
+    Groq = None  # type: ignore[assignment,misc]
+    _HAS_GROQ = False
 
+# ── Model configuration ──────────────────────────────────────────────
+_GROQ_MODEL = "llama-3.3-70b-versatile"
 
+# ── Retryable / quota error markers ──────────────────────────────────
 _RETRYABLE_MARKERS = (
     "503",
     "service unavailable",
     "unavailable",
-    "model_capacity_exhausted",
     "capacity",
     "resource exhausted",
     "deadline exceeded",
@@ -28,6 +38,7 @@ _RETRYABLE_MARKERS = (
     "rate_limit_exceeded",
     "rate limit",
     "too many requests",
+    "internal_server_error",
 )
 
 _QUOTA_MARKERS = (
@@ -38,17 +49,16 @@ _QUOTA_MARKERS = (
     "resource exhausted",
 )
 
-_GEMINI_MODEL = "gemini-2.0-flash"
-_GROQ_MODEL = _GEMINI_MODEL  # Backward-compat constant name used across the codebase.
 
-
+# ── Thin response wrapper ────────────────────────────────────────────
 class _TextResponse:
-    """Thin wrapper so callers can keep using response.text."""
+    """Wrapper so all callers can keep using ``response.text``."""
 
     def __init__(self, content: str) -> None:
         self.text = content
 
 
+# ── Error classification ─────────────────────────────────────────────
 def _is_retryable_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return any(marker in message for marker in _RETRYABLE_MARKERS)
@@ -59,113 +69,107 @@ def _is_quota_error(exc: Exception) -> bool:
     return any(marker in message for marker in _QUOTA_MARKERS)
 
 
-def _extract_retry_delay_seconds(exc: Exception) -> int:
-    match = re.search(r"retry[-_]after[^\d]*(\d+(?:\.\d+)?)", str(exc), re.I)
-    if not match:
-        return quota_manager.DEFAULT_RETRY_DELAY
-    return max(1, min(int(float(match.group(1))), 3600))
-
-
-def _contents_to_prompt(contents) -> str:
-    parts: list[str] = []
+# ── Prompt helpers ────────────────────────────────────────────────────
+def _contents_to_messages(contents: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Convert the legacy ``[{role, parts: [{text}]}]`` format into
+    Groq-compatible ``[{role, content}]`` chat messages."""
+    messages: list[dict[str, str]] = []
     for item in contents:
         role = item.get("role", "user")
-        text = " ".join(p.get("text", "") for p in item.get("parts", []) if isinstance(p, dict)).strip()
+        # Groq expects "assistant" not "model"
+        if role == "model":
+            role = "assistant"
+        text = " ".join(
+            p.get("text", "")
+            for p in item.get("parts", [])
+            if isinstance(p, dict)
+        ).strip()
         if text:
-            parts.append(f"{role}: {text}")
-    return "\n\n".join(parts)
+            messages.append({"role": role, "content": text})
+    return messages
 
 
-_key_cycle_lock = Lock()
-_key_cycle: Any = None
+# ── API key helpers (kept for backward compat) ────────────────────────
+def get_groq_api_key() -> str:
+    return settings.GROQ_API_KEY
 
 
-def get_gemini_api_keys() -> list[str]:
-    return settings.gemini_api_keys
+# Legacy aliases — other modules import these
+get_primary_api_key = get_groq_api_key
 
 
-def get_primary_api_key() -> str:
-    keys = get_gemini_api_keys()
-    return keys[0] if keys else ""
+# ── Core Groq call ────────────────────────────────────────────────────
+def _call_groq(messages: list[dict[str, str]], model: str = _GROQ_MODEL) -> _TextResponse:
+    """Make a single call to the Groq chat completions API."""
+    api_key = get_groq_api_key()
+    if not api_key:
+        raise RuntimeError("No Groq API key configured (set GROQ_API_KEY in .env)")
+
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.2,
+        max_tokens=4096,
+    )
+
+    text = response.choices[0].message.content if response.choices else ""
+    return _TextResponse(text or "")
 
 
-def _next_gemini_key() -> str:
-    global _key_cycle
-    keys = get_gemini_api_keys()
-    if not keys:
-        return ""
+def generate_with_retry(
+    client: Any = None,
+    model: str = _GROQ_MODEL,
+    contents: list | None = None,
+    max_attempts: int = 3,
+) -> _TextResponse:
+    """Generate a response from Groq with automatic retry on transient errors.
 
-    with _key_cycle_lock:
-        if _key_cycle is None:
-            _key_cycle = cycle(keys)
-        return next(_key_cycle)
-
-
-def _extract_text_from_response(response: Any) -> str:
-    # google.genai usually exposes .text; keep robust fallbacks.
-    text = getattr(response, "text", None)
-    if text:
-        return str(text)
-
-    candidates = getattr(response, "candidates", None)
-    if candidates:
-        try:
-            parts = candidates[0].content.parts
-            return " ".join(str(getattr(p, "text", "")) for p in parts).strip()
-        except Exception:
-            return ""
-
-    return ""
-
-
-def _call_gemini(contents, api_key: str):
-    prompt = _contents_to_prompt(contents)
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(model=_GEMINI_MODEL, contents=prompt)
-    text = _extract_text_from_response(response)
-    return _TextResponse(text)
-
-
-def generate_with_retry(client: Any, model: str, contents, max_attempts: int = 2):
-    """Gemini-only generation with API-key rotation.
-
-    Signature keeps ``client`` and ``model`` for backwards compatibility.
+    Parameters ``client`` and ``model`` are kept for backward compatibility
+    with existing call-sites.  ``client`` is ignored; ``model`` falls back
+    to the module-level ``_GROQ_MODEL``.
     """
-    del client, model
+    del client  # Not used — Groq client is created per-call
 
-    if not _HAS_GEMINI:
-        raise RuntimeError("google-genai package is not installed")
+    if not _HAS_GROQ:
+        raise RuntimeError(
+            "groq package is not installed.  Run: pip install groq"
+        )
 
-    keys = get_gemini_api_keys()
-    if not keys:
-        raise RuntimeError("No Gemini API key configured (set GEMINI_API_KEY_1..3)")
+    if not contents:
+        raise ValueError("contents must be a non-empty list")
+
+    messages = _contents_to_messages(contents)
+    if not messages:
+        raise ValueError("No valid messages could be extracted from contents")
 
     last_exc: Exception | None = None
 
-    attempts = max(1, max_attempts) * len(keys)
-    for _ in range(attempts):
-        api_key = _next_gemini_key()
-        if not api_key:
-            break
-
+    for attempt in range(max_attempts):
         try:
-            return _call_gemini(contents, api_key=api_key)
+            return _call_groq(messages, model=model or _GROQ_MODEL)
         except Exception as exc:
             last_exc = exc
+            logger.warning(
+                "Groq attempt %d/%d failed: %s", attempt + 1, max_attempts, exc
+            )
 
-            if _is_quota_error(exc) or _is_retryable_error(exc):
-                # Try next key quickly.
+            if _is_retryable_error(exc) or _is_quota_error(exc):
+                # Exponential backoff: 1s, 2s, 4s …
+                wait = min(2 ** attempt, 8)
+                time.sleep(wait)
                 continue
 
-            # Non-quota functional errors should bubble immediately.
+            # Non-transient errors bubble immediately
             raise
 
+    # All retries exhausted
     if last_exc is not None:
-        if _is_quota_error(last_exc) or _is_retryable_error(last_exc):
+        if _is_quota_error(last_exc):
             quota_manager.record_quota_exhausted(
-                retry_delay_seconds=_extract_retry_delay_seconds(last_exc),
-                api_key=get_primary_api_key(),
+                retry_delay_seconds=60,
+                api_key=get_groq_api_key(),
             )
         raise last_exc
 
-    raise RuntimeError("Gemini request failed before any attempt was made.")
+    raise RuntimeError("Groq request failed before any attempt was made.")

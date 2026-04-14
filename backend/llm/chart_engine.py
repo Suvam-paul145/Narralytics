@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 import json
-from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 
-from config import settings
 from llm.genai_client import generate_with_retry, _GROQ_MODEL
-
-
-@lru_cache(maxsize=1)
-def _get_client() -> Optional[None]:
-    """Gemini-only path keeps compatibility with existing call sites."""
-    return None
 
 
 def _parse_json_payload(raw: str) -> dict[str, Any]:
@@ -24,7 +16,7 @@ def _parse_json_payload(raw: str) -> dict[str, Any]:
         parts = text.split("```")
         text = parts[1] if len(parts) > 1 else text
         if text.startswith("json"):
-            text = text[4:].strip()
+            text = text[4:].strip()  # type: ignore
 
     start = text.find("{")
     end = text.rfind("}")
@@ -111,20 +103,21 @@ def get_chart_specs(schema: dict[str, Any], prompt: str, history: list[dict[str,
 
     system_prompt = _build_prompt(schema, prompt, output_count)
 
-    contents = [{"role": "system", "parts": [{"text": system_prompt}]}]
+    # Convert history to message format
+    contents = []
+    if history:
+        for turn in history[-6:]:  # type: ignore
+            contents.append({
+                "role": turn["role"],
+                "parts": [{"text": turn["content"]}]
+            })
 
-    for msg in history or []:
-        text = msg.get("content") or msg.get("text") or ""
-        role = msg.get("role", "user")
-        if text:
-            contents.append({"role": role, "parts": [{"text": text}]})
-
-    contents.append({"role": "user", "parts": [{"text": prompt}]})
+    # Add current message
+    contents.append({"role": "user", "parts": [{"text": system_prompt + "\nUser query: " + prompt}]})
 
     try:
-        client = _get_client()
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
             contents=contents,
         )
@@ -152,9 +145,8 @@ Aggregated Data (up to 30 rows):
 Keep it professional, punchy, and include actual numbers from the data. Do NOT explain what the chart is. Just give the business takeaway.
 """
     try:
-        client = _get_client()
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": system_prompt}]}],
         )

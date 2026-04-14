@@ -18,13 +18,11 @@ python-multipart>=0.0.12
 matplotlib>=3.8.0
 google-auth>=2.36.0
 google-auth-oauthlib>=1.2.0
-google-api-python-client>=2.154.0
 scikit-learn>=1.6.0
 statsmodels>=0.14.0
 cryptography>=44.0.0
 chardet>=5.0.0,<6.0.0
 charset-normalizer>=3.3.0,<3.4.0
 requests>=2.32.3
-urllib3>=2.2.0,<2.3.0
-google-genai
+urllib3<2.0.0
 groq

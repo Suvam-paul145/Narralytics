@@ -9,7 +9,6 @@ from auth.dependencies import get_current_user
 from database.datasets import get_dataset
 from database.history import save_interaction
 from llm.report_engine import generate_report_summary
-from llm.chart_renderer import render_chart_to_base64
 from pdf.generator import build_pdf_report
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -37,20 +36,10 @@ async def generate_report(req: ReportRequest, user: dict = Depends(get_current_u
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
-    # Process charts - render images if not provided
+    # Process charts — images are rendered client-side
     processed_charts = []
     for chart in req.charts:
         chart_dict = chart.model_dump()
-        
-        # Generate image if missing but we have data and spec
-        if not chart_dict.get("image_base64") and chart.data and chart.spec:
-            try:
-                image_base64 = render_chart_to_base64(chart.spec, chart.data)
-                if image_base64:
-                    chart_dict["image_base64"] = image_base64
-            except Exception as e:
-                print(f"⚠️ Failed to render chart image: {e}")
-        
         processed_charts.append(chart_dict)
 
     summary = generate_report_summary(

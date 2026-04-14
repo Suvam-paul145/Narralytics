@@ -1,14 +1,5 @@
-from functools import lru_cache
-
-from config import settings
 from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
 from llm.quota_manager import quota_manager
-
-
-@lru_cache(maxsize=1)
-def _get_client():
-    """Gemini-only path keeps compatibility with existing call sites."""
-    return None
 
 
 def generate_report_summary(dataset_name: str, charts: list) -> str:
@@ -39,9 +30,8 @@ Return only the paragraph text.
         )
 
     try:
-        client = _get_client()
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )

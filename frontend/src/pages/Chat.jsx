@@ -44,7 +44,10 @@ const SUGGESTION_CHIPS = [
 
 const nowIso = () => new Date().toISOString();
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const INSUFFICIENT_DATA_MESSAGE = "Data is insufficient for this request.";
+// Error messages — specific and actionable instead of one generic fallback
+const ERROR_NO_DATASET = "Please upload a dataset first (CSV or Excel) so I can analyze your data.";
+const ERROR_BACKEND_FAIL = "Something went wrong while processing your query. Please try rephrasing or check if the server is running.";
+const ERROR_NO_RESULTS = "No results were returned for this query. Try rephrasing your question or check if the dataset has the relevant columns.";
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const getAuthHeaders = (json = false) => {
@@ -817,11 +820,11 @@ export default function Chat() {
           const aiMessage = {
             id: `assistant-${Date.now() + 2}`,
             role: "assistant",
-            content: INSUFFICIENT_DATA_MESSAGE,
+            content: ERROR_NO_DATASET,
             timestamp: nowIso(),
-            meta: { mode: "insufficient", pattern, reason: "missing_dataset" },
+            meta: { mode: "no_dataset", pattern, reason: "missing_dataset" },
           };
-          await complete(aiMessage, { pattern, mode: "insufficient", source: "dataset_guard" });
+          await complete(aiMessage, { pattern, mode: "no_dataset", source: "dataset_guard" });
           return;
         }
 
@@ -876,29 +879,28 @@ export default function Chat() {
           meta: { mode: "backend", pattern, chart_source: "backend_engine" },
         };
 
-        if (chatPayload?.cannot_answer) {
-          aiMessage.content = INSUFFICIENT_DATA_MESSAGE;
+        if (chatPayload?.cannot_answer && queryPayload?.cannot_answer && mergedCharts.length === 0) {
+          // Both engines explicitly say they can't answer — show the reason
+          aiMessage.content = chatPayload?.reason || queryPayload?.reason || ERROR_NO_RESULTS;
           aiMessage.charts = [];
-          aiMessage.meta = { ...aiMessage.meta, mode: "insufficient", reason: "chat_cannot_answer" };
-        } else if (queryPayload?.cannot_answer && !aiMessage.content && mergedCharts.length === 0) {
-          aiMessage.content = INSUFFICIENT_DATA_MESSAGE;
-          aiMessage.charts = [];
-          aiMessage.meta = { ...aiMessage.meta, mode: "insufficient", reason: "query_cannot_answer" };
+          aiMessage.meta = { ...aiMessage.meta, mode: "cannot_answer" };
         } else if (!aiMessage.content && mergedCharts.length === 0) {
-          aiMessage.content = INSUFFICIENT_DATA_MESSAGE;
-          aiMessage.meta = { ...aiMessage.meta, mode: "insufficient", reason: "no_relevant_result" };
+          // No text and no charts at all — generic fallback
+          aiMessage.content = ERROR_NO_RESULTS;
+          aiMessage.meta = { ...aiMessage.meta, mode: "no_results" };
         }
 
         await complete(aiMessage, { pattern, mode: aiMessage?.meta?.mode || "backend", source: "backend" });
       } catch (error) {
+        console.error("Chat request failed:", error);
         const aiMessage = {
           id: `assistant-${Date.now() + 4}`,
           role: "assistant",
-          content: INSUFFICIENT_DATA_MESSAGE,
+          content: `${ERROR_BACKEND_FAIL} (${error.message})`,
           timestamp: nowIso(),
-          meta: { mode: "insufficient", pattern, reason: "request_failed", error: error.message },
+          meta: { mode: "error", pattern, reason: "request_failed", error: error.message },
         };
-        await complete(aiMessage, { pattern, mode: "insufficient", source: "backend_error" });
+        await complete(aiMessage, { pattern, mode: "error", source: "backend_error" });
       }
     },
     [

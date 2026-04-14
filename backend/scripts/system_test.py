@@ -26,13 +26,16 @@ def test_quota_manager():
 def test_groq_connection():
     """Test Groq API connection"""
     try:
-        from llm.gemini_client import test_groq_connection
+        from llm.genai_client import generate_with_retry
         
-        result = test_groq_connection()
+        result = generate_with_retry(
+            client=None,
+            contents=[{"role": "user", "parts": [{"text": "Say hello in one word."}]}],
+        )
         print(f"🤖 Groq API Test:")
-        print(f"  ✅ Response: {result}")
+        print(f"  ✅ Response: {result.text[:50]}")
         
-        return "Hello" in result or "Error" in result
+        return len(result.text) > 0
     except Exception as e:
         print(f"  ❌ Groq Connection Error: {e}")
         return False
@@ -119,7 +122,7 @@ def main():
         print("🎉 ALL SYSTEMS OPERATIONAL!")
         print("\n✅ Your Narralytics backend is ready for production:")
         print("  • Quota management working")
-        print("  • Gemini API connected")
+        print("  • Groq API connected")
         print("  • Fallback systems active")
         print("  • Health monitoring enabled")
         print("\n🚀 Start your server with: python start_server.py")

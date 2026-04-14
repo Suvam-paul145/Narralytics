@@ -57,7 +57,7 @@ class HealthChecker:
     
     # Optional dependencies
     OPTIONAL_DEPENDENCIES = [
-        ("groq", "__version__", "Groq"),
+        ("groq", "__version__", "Groq SDK"),
     ]
     
     def __init__(self):
@@ -120,8 +120,8 @@ class HealthChecker:
             # Define critical configuration checks
             config_checks = [
                 (
-                    bool(getattr(settings, "gemini_api_keys", [])),
-                    "Gemini API key(s)",
+                    bool(getattr(settings, "GROQ_API_KEY", "")),
+                    "Groq API key",
                     False,
                 ),
                 (settings.MONGODB_URI, "MongoDB URI", True),

@@ -6,18 +6,13 @@ analytical instruction grounded strictly in the dataset schema. This prevents
 hallucinated column names from ever reaching the SQL generator.
 """
 
+import logging
 import re
-from functools import lru_cache
 
-from config import settings
 from llm.genai_client import _GROQ_MODEL, generate_with_retry, get_primary_api_key
 from llm.quota_manager import quota_manager
 
-
-@lru_cache(maxsize=1)
-def _get_client():
-    """Gemini-only path keeps compatibility with existing call sites."""
-    return None
+logger = logging.getLogger(__name__)
 
 
 _SYSTEM_TEMPLATE = """
@@ -39,9 +34,6 @@ instruction using ONLY column names that exist in the schema below.
 4. ONLY prepend [CANNOT_ANSWER] if the question requires columns that genuinely don't exist 
    (e.g., asking for "inventory levels" but dataset has no quantity/stock columns).
 5. Return ONLY the enhanced prompt string. No JSON. No explanation. No code fences.
-
-=== RECENT CONVERSATION (for context) ===
-{history_text}
 """
 
 
@@ -110,47 +102,49 @@ def enhance_prompt(raw: str, schema: dict, history: list[dict] | None = None) ->
     
     primary_key = get_primary_api_key()
     if not quota_manager.is_quota_available(primary_key):
-        print("Gemini API quota exhausted, using smart prompt enhancement")
+        logger.warning("Groq API quota exhausted, using smart prompt enhancement")
         return smart_enhanced
 
     schema_text = build_schema_text(schema)
 
     history_text = ""
     if history:
-        for turn in history[-4:]:
+        for turn in history[-6:]:  # type: ignore
             role = turn.get("role", "user").upper()
-            content = turn.get("content", "")
-            history_text += f"\n{role}: {content}"
+            history_text += f"\n{role}: {turn.get('content', '')}"
 
     system_prompt = _SYSTEM_TEMPLATE.format(
         schema_text=schema_text,
-        history_text=history_text or "(none)",
     )
 
-    full_prompt = f"{system_prompt}\n\nUser question: {smart_enhanced}"
+    raw_prompt = smart_enhanced  # Use smart_enhanced as the user's input to the LLM
+
+    full_prompt = f"{system_prompt}\n\n=== RECENT CONVERSATION ===\n{history_text or '(no prior context)'}\n\n=== USER INPUT ===\n{raw_prompt}"
+    
+    contents = [{"role": "user", "parts": [{"text": full_prompt}]}]
 
     try:
-        client = _get_client()
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
-            contents=[{"role": "user", "parts": [{"text": full_prompt}]}],
+            contents=contents,
         )
         quota_manager.record_request(primary_key)
         enhanced = response.text.strip()
 
         # If response is JSON or too long, fallback to smart enhancement
         if enhanced.startswith("{") or len(enhanced.split("\n")) > 8:
+            logger.warning(f"[prompt_enhancer] LLM response was JSON or too long. Falling back to smart enhancement. Response: {enhanced[:200]}")
             return smart_enhanced
 
         # If LLM tries to reject but we have both numeric and categorical columns, use smart enhancement
         if enhanced.startswith("[CANNOT_ANSWER]") and schema.get("numeric_columns") and schema.get("categorical_columns"):
-            print(f"[prompt_enhancer] LLM rejected query, but schema has data. Using smart enhancement instead.")
+            logger.info("[prompt_enhancer] LLM rejected query, but schema has data. Using smart enhancement instead.")
             return smart_enhanced
 
         return enhanced
     except Exception as exc:
-        print(f"[prompt_enhancer] LLM error: {exc}, using smart enhancement")
+        logger.warning(f"[prompt_enhancer] LLM error: {exc}, using smart enhancement")
         if quota_manager.is_quota_error(exc):
             return smart_enhanced
         return smart_enhanced

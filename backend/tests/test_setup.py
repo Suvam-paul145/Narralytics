@@ -199,7 +199,7 @@ def main():
         print("\nCommon fixes:")
         print("- Install dependencies: pip install -r requirements.txt")
         print("- Check .env file has all required values")
-        print("- Verify MongoDB Atlas and Gemini API credentials")
+        print("- Verify MongoDB Atlas and Groq API credentials")
 
 if __name__ == "__main__":
     main()

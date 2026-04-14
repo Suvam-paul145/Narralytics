@@ -1,9 +1,7 @@
 import json
 import logging
-from functools import lru_cache
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 
-from config import settings
 from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
 from llm.quota_manager import quota_manager
 
@@ -28,12 +26,6 @@ CHART_TYPES = {
 DTYPE_NUMERIC = "numeric"
 DTYPE_DATETIME = "datetime"
 DTYPE_CATEGORICAL = "categorical"
-
-
-@lru_cache(maxsize=1)
-def _get_client() -> None:
-    """Gemini-only path keeps compatibility with existing call sites."""
-    return None
 
 
 def _parse_json_payload(raw: str) -> Dict[str, Any]:
@@ -297,17 +289,15 @@ def generate_auto_dashboard(schema: Dict[str, Any]) -> List[Dict[str, Any]]:
         return quota_manager.get_fallback_response("auto_dashboard", schema=schema)
     
     try:
-        client = _get_client()
-
         response = generate_with_retry(
-            client=client,
-            model=DEFAULT_MODEL,
+            client=None,
+            model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
         quota_manager.record_request(primary_key)
         
         if not response or not response.text:
-            logger.error("Empty response from GenAI model")
+            logger.error("Empty response from Groq model")
             return []
         
         payload = _parse_json_payload(response.text)

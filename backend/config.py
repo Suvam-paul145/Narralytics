@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 from typing import Any
 
 from pydantic import ValidationInfo, field_validator
@@ -23,13 +24,10 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://localhost:27017"
     MONGODB_DB: str = "narralytics"
 
-    GEMINI_API_KEY: str = ""  # Legacy single key fallback
-    GEMINI_API_KEY_1: str = ""
-    GEMINI_API_KEY_2: str = ""
-    GEMINI_API_KEY_3: str = ""
-    GROQ_API_KEY: str = ""  # Deprecated/ignored (kept for backwards compatibility)
+    # ── LLM Provider (Groq) ──────────────────────────────────────────
+    GROQ_API_KEY: str = ""
 
-    UPLOAD_DIR: str = "./uploads"
+    UPLOAD_DIR: str = "/tmp/uploads" if os.getenv("AWS_LAMBDA_FUNCTION_NAME") else "./uploads"
     AWS_REGION: str = "us-east-1"
     AWS_BUCKET: str = ""
     DYNAMODB_TABLE: str = "narralytics_history"
@@ -37,14 +35,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
-    @field_validator(
-        "GEMINI_API_KEY",
-        "GEMINI_API_KEY_1",
-        "GEMINI_API_KEY_2",
-        "GEMINI_API_KEY_3",
-        "GROQ_API_KEY",
-        mode="before",
-    )
+    @field_validator("GROQ_API_KEY", mode="before")
     @classmethod
     def strip_api_keys(cls, value: Any) -> str:
         if value is None:
@@ -52,23 +43,6 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return value.strip()
         return str(value).strip()
-
-    @property
-    def gemini_api_keys(self) -> list[str]:
-        keys = [
-            self.GEMINI_API_KEY_1,
-            self.GEMINI_API_KEY_2,
-            self.GEMINI_API_KEY_3,
-            self.GEMINI_API_KEY,
-        ]
-        # Keep order and drop empty values + duplicates.
-        seen: set[str] = set()
-        filtered: list[str] = []
-        for key in keys:
-            if key and key not in seen:
-                seen.add(key)
-                filtered.append(key)
-        return filtered
 
     @field_validator("DEBUG", mode="before")
     @classmethod

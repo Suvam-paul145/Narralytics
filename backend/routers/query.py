@@ -213,18 +213,9 @@ async def chart_query(request: QueryRequest, user: dict = Depends(get_current_us
         output_count=request.output_count,
     )
 
-    # If LLM-derived options all failed, fall back to deterministic charts using schema
     if not options or all(option.error for option in options):
-        fallback_spec = _generate_guaranteed_fallback(request.prompt, schema)
-        fallback_options = fallback_spec.get("options", []) if isinstance(fallback_spec, dict) else []
-        options = _execute_options_with_retry(
-            raw_options=fallback_options,
-            db_path=dataset["db_path"],
-            prompt=request.prompt,
-            schema=schema,
-            history=history,
-            output_count=request.output_count,
-        )
+        # We do not hallucinate fake fallback charts anymore. We rely entirely on dynamic Groq output.
+        pass
 
     if not options or all(option.error for option in options):
         return QueryResponse(

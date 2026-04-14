@@ -1,9 +1,7 @@
 import json
 import logging
-from functools import lru_cache
-from typing import Dict, List, Optional, Union
+from typing import Dict, List
 
-from config import settings
 from llm.genai_client import generate_with_retry, _GROQ_MODEL, get_primary_api_key
 from llm.quota_manager import quota_manager
 
@@ -19,12 +17,6 @@ class ChatEngineError(Exception):
 class JSONParsingError(ChatEngineError):
     """Raised when JSON parsing fails"""
     pass
-
-
-@lru_cache(maxsize=1)
-def _get_client() -> None:
-    """Gemini-only path: no provider-specific client needed by callers."""
-    return None
 
 
 def _parse_json_payload(raw: str) -> Dict:
@@ -162,7 +154,7 @@ def get_chat_response(
     try:
         system_prompt = build_chat_system_prompt(schema, dataset_filename)
         
-        # Convert history to new format with validation
+        # Convert history to message format with validation
         contents = []
         valid_history = history[-10:] if history else []  # Limit history for performance
         
@@ -182,10 +174,8 @@ def get_chat_response(
             "parts": [{"text": f"{system_prompt}\n\nUser: {message}"}]
         })
 
-        client = _get_client()
-
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
             contents=contents
         )
@@ -193,27 +183,17 @@ def get_chat_response(
         
         parsed = _parse_json_payload(response.text)
         
-        # --- GUARANTEED FALLBACK ---
-        # If the LLM still refuses to answer, we override it to guarantee the user gets a helpful reply
-        # (Very important for avoiding "Insufficient data" errors in the UI during tests)
-        if parsed.get("cannot_answer"):
-            logger.warning(f"LLM tried to reject question. Reason: {parsed.get('reason')}. Forcing approval.")
-            parsed["cannot_answer"] = False
-            parsed["answer"] = f"Here is the data based on your request about {dataset_filename}."
-            if "supporting_sql" not in parsed:
-                parsed["supporting_sql"] = "SELECT * FROM data LIMIT 10"  # Safe fallback query
-                
+        # We no longer force a guaranteed fallback override here. 
+        # If the LLM decides it cannot answer, we respect its decision 
+        # so the user gets an accurate "I cannot answer this" response.
         return parsed
         
     except JSONParsingError as e:
         logger.error(f"JSON parsing failed: {e}")
-        # Always return a safe fallback instead of an error to prevent UI crashing
+        # Return an honest error instead of mocking a fallback
         return {
-            "cannot_answer": False,
-            "answer": "Here is the summary based on the dataset you provided.",
-            "supporting_sql": "SELECT * FROM data LIMIT 5",
-            "needs_data": True,
-            "needs_forecast": False
+            "cannot_answer": True,
+            "reason": "Failed to parse the AI model's response.",
         }
     except Exception as exc:
         logger.error(f"Chat engine failed: {exc}")
@@ -227,13 +207,10 @@ def get_chat_response(
                 schema=schema
             )
         
-        # Absolute safeguard against the "Insufficient data" UI loop
+        # Bubble up real backend failure to inform the user
         return {
-            "cannot_answer": False, 
-            "answer": "Here is an analysis based on your data.",
-            "supporting_sql": "SELECT * FROM data LIMIT 5",
-            "needs_data": True,
-            "needs_forecast": False
+            "cannot_answer": True, 
+            "reason": "An error occurred while communicating with the AI service. Please try again."
         }
 
 def refine_chat_answer(
@@ -277,10 +254,8 @@ Return only the final answer text.
         return draft_answer
     
     try:
-        client = _get_client()
-
         response = generate_with_retry(
-            client=client,
+            client=None,
             model=_GROQ_MODEL,
             contents=[{"role": "user", "parts": [{"text": prompt}]}]
         )
@@ -296,9 +271,5 @@ Return only the final answer text.
     except Exception as e:
         logger.error(f"Answer refinement failed: {e}")
         
-        # Use intelligent fallback if quota exhausted
-        if quota_manager.is_quota_error(e):
-            logger.info("Using fallback refinement due to quota exhaustion")
-            return f"Based on the data analysis: {draft_answer}"
-        
+        # For fallback refinement when quota expands, pass the draft answer
         return draft_answer

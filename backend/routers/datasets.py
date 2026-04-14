@@ -23,16 +23,24 @@ def _parse_uploaded_dataframe(filename: str, content: bytes) -> pd.DataFrame:
     suffix = Path(filename).suffix.lower()
     
     # --- Binary signature protection ---
-    # Check for Apple Binary Plist (bplist00) or Zip (PK\x03\x04) misidentified as CSV
-    if content.startswith(b"bplist00"):
+    # Check for Apple Binary Plist (bplist00), WebArchive, or Zip (PK\x03\x04) misidentified as CSV
+    head = content[:2048]
+    if b"bplist00" in head or b"WebMainResource" in head or b"Mac OS X" in head:
         raise HTTPException(
             status_code=422, 
-            detail="The file appears to be a Binary Plist. Only CSV and Excel files are supported."
+            detail="The file appears to be a Binary Plist or WebArchive. Only valid CSV and Excel files are supported."
         )
-    if content.startswith(b"PK\x03\x04") and suffix == ".csv":
+    if suffix == ".csv" and head.startswith(b"PK\x03\x04"):
         raise HTTPException(
             status_code=422,
             detail="Binary Zip signature detected in CSV. Is this a renamed .xlsx or .zip file?"
+        )
+    
+    # Catch binary files pretending to be CSVs by checking for null bytes
+    if suffix == ".csv" and b"\x00" in head and head[:2] not in (b'\xff\xfe', b'\xfe\xff'):
+        raise HTTPException(
+            status_code=422,
+            detail="The file contains binary data and is not a valid plain-text CSV."
         )
 
     buffer = BytesIO(content)

@@ -15,10 +15,10 @@ async def connect_mongodb() -> None:
         db = client[settings.MONGODB_DB]
         # Test connection
         await client.admin.command('ping')
-        print(f"✅ Connected to MongoDB: {settings.MONGODB_DB}")
+        print(f"Connected to MongoDB: {settings.MONGODB_DB}")
     except Exception as e:
-        print(f"⚠️  MongoDB connection failed: {e}")
-        print("⚠️  Running in offline mode - some features may not work")
+        print(f"MongoDB connection failed: {e}")
+        print("Running in offline mode - some features may not work")
         client = None
         db = None
 
