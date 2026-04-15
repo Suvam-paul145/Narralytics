@@ -45,8 +45,29 @@ def test_extract_embedded_csv_text_recovers_header_and_rows():
     assert extracted.splitlines()[0] == "order_id,order_date,product_category,total_revenue"
 
 
+def test_extract_embedded_csv_text_recovers_html_wrapped_header():
+    wrapped = (
+        b'bplist00\x00\x01junk\n'
+        b'<html><body><pre style="word-wrap: break-word; white-space: pre-wrap;">order_id,order_date,product_id,product_category,price,total_revenue\n'
+        b'1,13-04-2022,2637,Books,128.75,463.52\n'
+        b'2,14-04-2022,9262,Fashion,100.00,400.00\n'
+    )
+
+    extracted = extract_embedded_csv_text(wrapped)
+
+    assert extracted is not None
+    first_line = extracted.splitlines()[0]
+    assert first_line.startswith("order_id,order_date,product_id,product_category")
+
+
 def test_suspicious_dataframe_flags_wrapper_columns():
     frame = pd.DataFrame(columns=["bplist00 payload", "Unnamed: 1", "Unnamed: 2"])
+
+    assert is_suspicious_dataframe(frame) is True
+
+
+def test_suspicious_dataframe_flags_numeric_like_headers():
+    frame = pd.DataFrame(columns=["1", "13-04-2022", "2637", "Books"])
 
     assert is_suspicious_dataframe(frame) is True
 

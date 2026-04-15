@@ -98,3 +98,14 @@ def test_dashboard_fallback_builds_multiple_specs():
     assert len(specs) >= 3
     assert any(spec["chart_type"] == "line" for spec in specs)
     assert any(spec["chart_type"] == "bar" for spec in specs)
+
+
+def test_rule_based_query_uses_avg_for_rating_by_payment_type():
+    result = plan_rule_based_query("give me top 5 payment type by rating", SCHEMA)
+
+    assert result["matched"] is True
+    spec = result["specs"][0]
+    assert spec["x_key"] == "payment_method"
+    assert spec["y_key"] == "rating"
+    assert spec["aggregation"] == "avg"
+    assert 'AVG("rating")' in spec["sql"]

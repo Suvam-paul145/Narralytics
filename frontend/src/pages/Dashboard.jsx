@@ -37,6 +37,7 @@ import { useAuth } from "../context/AuthContext";
 import { CHART_COLORS } from "../utils/chartColors";
 
 const SUPPORTED = new Set(["bar", "line", "pie", "scatter", "area"]);
+const ACTIVE_DATASET_STORAGE_KEY = "narralytics.activeDatasetId";
 const BRIEFS = [
   "Executive overview with trends and top drivers",
   "Regional performance and top categories",
@@ -361,10 +362,18 @@ export default function Dashboard() {
       const payload = await fetchJson(`${API_ENDPOINTS.DATASETS}/`, { headers: headers() });
       const items = Array.isArray(payload.datasets) ? payload.datasets : [];
       setDatasets(items);
+      const savedDatasetId = localStorage.getItem(ACTIVE_DATASET_STORAGE_KEY);
       if (items.length === 0) {
         setSelectedId("");
+      } else if (preserve && savedDatasetId && items.some((item) => item.dataset_id === savedDatasetId)) {
+        setSelectedId(savedDatasetId);
       } else if (!preserve || !items.some((item) => item.dataset_id === selectedId)) {
-        setSelectedId(items[0].dataset_id);
+        const amazonDataset = items.find((item) =>
+          String(item.original_filename || item.filename || item.name || "")
+            .toLowerCase()
+            .includes("amazon_sales"),
+        );
+        setSelectedId((amazonDataset || items[0]).dataset_id);
       }
     } catch (error) {
       setMessage(error.message || "Failed to load datasets.");
@@ -405,6 +414,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (selectedId && !loadingSets) {
+      localStorage.setItem(ACTIVE_DATASET_STORAGE_KEY, selectedId);
       generateDashboard(selectedId, requirements);
     }
   }, [selectedId, loadingSets]);
@@ -428,6 +438,9 @@ export default function Dashboard() {
       const payload = await response.json();
       await loadDatasets(false);
       setSelectedId(payload.dataset_id);
+      if (payload?.dataset_id) {
+        localStorage.setItem(ACTIVE_DATASET_STORAGE_KEY, payload.dataset_id);
+      }
     } catch (error) {
       setMessage(error.message || "Upload failed.");
     } finally {

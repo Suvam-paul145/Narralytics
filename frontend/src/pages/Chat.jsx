@@ -23,6 +23,7 @@ import { CHART_COLORS } from "../utils/chartColors";
 
 const API_BASE = API_BASE_URL || import.meta.env.VITE_API_URL || "http://localhost:8000";
 const SUPPORTED_CHARTS = new Set(["bar", "line", "pie", "scatter", "area"]);
+const ACTIVE_DATASET_STORAGE_KEY = "narralytics.activeDatasetId";
 
 const SUGGESTION_CHIPS = [
   "Show top 5 regions by total revenue",
@@ -45,6 +46,13 @@ const getAuthHeaders = (json = false) => {
   if (json) headers["Content-Type"] = "application/json";
   return headers;
 };
+
+const persistActiveDatasetId = (datasetId) => {
+  if (!datasetId) return;
+  localStorage.setItem(ACTIVE_DATASET_STORAGE_KEY, datasetId);
+};
+
+const readActiveDatasetId = () => localStorage.getItem(ACTIVE_DATASET_STORAGE_KEY);
 
 const fetchJsonWithTimeout = async (url, options = {}, timeoutMs = 30000) => {
   const controller = new AbortController();
@@ -452,6 +460,40 @@ export default function Chat() {
     }
   }, []);
 
+  const fetchPreferredDataset = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/datasets/`, { headers: getAuthHeaders() });
+      if (!response.ok) return null;
+      const payload = await response.json();
+      const items = Array.isArray(payload.datasets) ? payload.datasets : [];
+      if (!items.length) return null;
+
+      const savedId = readActiveDatasetId();
+      const savedMatch = savedId ? items.find((item) => item.dataset_id === savedId) : null;
+      const amazonMatch = items.find((item) =>
+        String(item.original_filename || item.name || item.filename || "")
+          .toLowerCase()
+          .includes("amazon_sales"),
+      );
+      const selected = savedMatch || amazonMatch || items[0];
+      persistActiveDatasetId(selected.dataset_id);
+      return {
+        dataset_id: selected.dataset_id,
+        filename:
+          selected.original_filename ||
+          selected.name ||
+          selected.filename ||
+          "Attached Dataset",
+        columns: Array.isArray(selected.columns) ? selected.columns : [],
+        row_count: selected.row_count,
+        profile: selected.profile || null,
+        cleaning_report: selected.cleaning_report || null,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const resolveDatasetForSession = useCallback(async (datasetId, fallbackName) => {
     if (!datasetId) {
       return null;
@@ -504,14 +546,18 @@ export default function Chat() {
       if (session.dataset_id) {
         const resolvedDataset = await resolveDatasetForSession(session.dataset_id, session.dataset_name);
         setDataset(resolvedDataset);
+        if (resolvedDataset?.dataset_id) {
+          persistActiveDatasetId(resolvedDataset.dataset_id);
+        }
       } else {
-        setDataset(null);
+        const fallbackDataset = await fetchPreferredDataset();
+        setDataset(fallbackDataset);
       }
       return true;
     } catch {
       return false;
     }
-  }, [resolveDatasetForSession]);
+  }, [fetchPreferredDataset, resolveDatasetForSession]);
 
   useEffect(() => {
     let mounted = true;
@@ -521,6 +567,10 @@ export default function Chat() {
       const items = await refreshSessions();
       if (!mounted) return;
       if (items.length > 0) await loadSession(items[0].session_id);
+      if (mounted && !dataset) {
+        const fallbackDataset = await fetchPreferredDataset();
+        if (fallbackDataset) setDataset(fallbackDataset);
+      }
       setLoadingSessions(false);
     };
 
@@ -528,7 +578,7 @@ export default function Chat() {
     return () => {
       mounted = false;
     };
-  }, [refreshSessions, loadSession]);
+  }, [refreshSessions, loadSession, fetchPreferredDataset, dataset]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -635,7 +685,6 @@ export default function Chat() {
     setActiveSessionId(newSessionId);
     setMessages([]);
     setQuery("");
-    setDataset(null);
     setUploadError("");
     await upsertSessionMeta({ sessionId: newSessionId, title: "New Chat" });
     await refreshSessions();
@@ -671,6 +720,7 @@ export default function Chat() {
         const uploaded = await response.json();
         setUploadProgress(100);
         setDataset(uploaded);
+        persistActiveDatasetId(uploaded?.dataset_id);
 
         const existingTitle =
           sessions.find((session) => session.session_id === activeSessionId)?.title ||
@@ -781,10 +831,12 @@ export default function Chat() {
         const chatPayload = backendResults[0].status === "fulfilled" ? backendResults[0].value : null;
         const queryPayload = backendResults[1].status === "fulfilled" ? backendResults[1].value : null;
 
-        const mergedCharts = [
-          ...(Array.isArray(chatPayload?.charts) ? chatPayload.charts : []),
-          ...(Array.isArray(queryPayload?.options) ? queryPayload.options : []),
-        ]
+        // Prefer charts from /chat because that route already applies deterministic
+        // matching + SQL execution for the current prompt. Fall back to /query only
+        // when /chat didn't return any charts.
+        const primaryCharts = Array.isArray(chatPayload?.charts) ? chatPayload.charts : [];
+        const fallbackCharts = Array.isArray(queryPayload?.options) ? queryPayload.options : [];
+        const mergedCharts = (primaryCharts.length > 0 ? primaryCharts : fallbackCharts)
           .map(normalizeChartPayload)
           .filter((chart) => Array.isArray(chart.data) && chart.data.length > 0);
 
@@ -1171,11 +1223,8 @@ export default function Chat() {
                       </strong>
                       <button
                         type="button"
-                        onClick={() => {
-                          setDataset(null);
-                          setMessages([]);
-                        }}
-                        title="Clear dataset"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Replace dataset"
                         style={{
                           border: "1px solid var(--border)",
                           background: "transparent",
@@ -1186,7 +1235,7 @@ export default function Chat() {
                           fontSize: "0.65rem",
                         }}
                       >
-                        Clear
+                        Replace
                       </button>
                     </div>
                   )}

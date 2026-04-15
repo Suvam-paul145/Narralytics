@@ -28,13 +28,76 @@ EMBEDDED_CSV_HEADER_HINTS = (
 )
 
 
+def _sanitize_candidate_csv_line(line: str) -> str:
+    cleaned = line.strip().strip("\x00")
+    lowered = cleaned.lower()
+
+    # Common HTML-webarchive wrappers where CSV begins after a quoted pre block.
+    for marker in ('">', "</pre>"):
+        if marker in cleaned:
+            cleaned = cleaned.split(marker)[-1].strip()
+    if "<pre" in lowered and ">" in cleaned:
+        cleaned = cleaned.split(">")[-1].strip()
+
+    return cleaned
+
+
+def _looks_like_header_token(token: str) -> bool:
+    value = token.strip().strip('"').strip()
+    if not value:
+        return False
+    lowered = value.lower()
+
+    # Exclude obvious data-like tokens.
+    if re.fullmatch(r"\d+(\.\d+)?", lowered):
+        return False
+    if re.fullmatch(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", lowered):
+        return False
+    if re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", lowered):
+        return False
+
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_ %:/().-]*", value))
+
+
+def _is_likely_bad_header(columns: list[str]) -> bool:
+    if not columns:
+        return True
+
+    parsed = [str(column).strip() for column in columns]
+    numeric_like = 0
+    date_like = 0
+    unnamed_like = 0
+
+    for column in parsed:
+        lowered = column.lower()
+        if lowered.startswith("unnamed"):
+            unnamed_like += 1
+        if re.fullmatch(r"\d+(\.\d+)?", lowered):
+            numeric_like += 1
+        if re.fullmatch(r"\d{1,2}[-/]\d{1,2}[-/]\d{2,4}", lowered) or re.fullmatch(
+            r"\d{4}[-/]\d{1,2}[-/]\d{1,2}",
+            lowered,
+        ):
+            date_like += 1
+
+    total = len(parsed)
+    if unnamed_like >= max(2, total // 2):
+        return True
+    if numeric_like >= max(2, total // 2):
+        return True
+    if date_like >= max(2, total // 3):
+        return True
+
+    return False
+
+
 def extract_embedded_csv_text(content: bytes) -> str | None:
     """Recover CSV text when the uploaded file is wrapped in a web archive or noisy text blob."""
     decoded = content.decode("utf-8", errors="ignore")
     if not decoded.strip():
         decoded = content.decode("latin1", errors="ignore")
 
-    lines = [line.strip().strip("\x00") for line in decoded.splitlines()]
+    lines = [_sanitize_candidate_csv_line(line) for line in decoded.splitlines()]
     best_index = None
     best_score = -1
 
@@ -49,8 +112,15 @@ def extract_embedded_csv_text(content: bytes) -> str | None:
             continue
 
         token_score = 0
+        header_like_count = sum(1 for token in tokens if _looks_like_header_token(token))
+        data_like_count = len(tokens) - header_like_count
+
         if any(any(hint in token.lower() for hint in EMBEDDED_CSV_HEADER_HINTS) for token in tokens):
             token_score += 10
+        if header_like_count >= max(3, len(tokens) // 2):
+            token_score += 10
+        if data_like_count >= max(3, len(tokens) // 2):
+            token_score -= 8
         if all(re.fullmatch(r"[A-Za-z0-9_ %:/().-]+", token or "") for token in tokens[: min(len(tokens), 10)]):
             token_score += 6
         if "webresourcedata" in lowered or "bplist00" in lowered:
@@ -84,6 +154,9 @@ def is_suspicious_dataframe(df: pd.DataFrame) -> bool:
         return True
 
     column_names = [str(column) for column in df.columns]
+    if _is_likely_bad_header(column_names):
+        return True
+
     unnamed_count = sum(name.lower().startswith("unnamed") for name in column_names)
     weird_count = sum(
         "bplist00" in name.lower()

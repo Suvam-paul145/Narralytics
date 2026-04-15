@@ -40,7 +40,7 @@ REVIEW_ALIASES = ("review count", "reviews", "review", "feedback count")
 REGION_ALIASES = ("customer region", "region", "geography", "location", "market")
 CATEGORY_ALIASES = ("product category", "category", "segment", "vertical")
 PRODUCT_ALIASES = ("product id", "product", "item", "sku")
-PAYMENT_ALIASES = ("payment method", "payment mode", "payment", "upi", "card", "wallet", "cod")
+PAYMENT_ALIASES = ("payment method", "payment mode", "payment type", "payment", "upi", "card", "wallet", "cod")
 CUSTOMER_ALIASES = ("customer", "customers", "buyer", "client")
 PROFIT_ALIASES = ("profit", "profitable", "margin", "gross profit", "net profit")
 BUSINESS_ALIASES = ("business", "businesses", "company", "companies")
@@ -159,47 +159,40 @@ def _pick_metric_column(schema: dict[str, Any], question: str) -> tuple[dict[str
     if not numeric_columns:
         return None, "sum"
 
-    aggregation = "avg" if _contains_phrase(question, AVERAGE_WORDS) else "sum"
+    # First, detect explicit intent-driven aggregation keywords.
+    explicit_aggregation = "avg" if _contains_phrase(question, AVERAGE_WORDS) else "sum"
     if _contains_phrase(question, COUNT_WORDS):
-        aggregation = "count"
+        explicit_aggregation = "count"
 
-    candidates = [
-        _pick_best_column(schema, question, REVENUE_ALIASES, dtype="numeric"),
-        _pick_best_column(schema, question, QUANTITY_ALIASES, dtype="numeric"),
-        _pick_best_column(schema, question, DISCOUNT_ALIASES, dtype="numeric"),
-        _pick_best_column(schema, question, PRICE_ALIASES, dtype="numeric"),
-        _pick_best_column(schema, question, RATING_ALIASES, dtype="numeric"),
-        _pick_best_column(schema, question, REVIEW_ALIASES, dtype="numeric"),
+    # Score all numeric alias families and choose the strongest match instead of
+    # returning the first non-null candidate (which can incorrectly bias to revenue).
+    metric_families: list[tuple[tuple[str, ...], str]] = [
+        (REVENUE_ALIASES, "sum"),
+        (QUANTITY_ALIASES, "sum"),
+        (DISCOUNT_ALIASES, "avg"),
+        (PRICE_ALIASES, "avg"),
+        (RATING_ALIASES, "avg"),
+        (REVIEW_ALIASES, "sum"),
     ]
-    candidates = [candidate for candidate in candidates if candidate is not None]
-
-    if candidates:
-        return candidates[0], aggregation
-
-    preferred_alias_groups = (
-        REVENUE_ALIASES,
-        QUANTITY_ALIASES,
-        PRICE_ALIASES,
-        DISCOUNT_ALIASES,
-        RATING_ALIASES,
-        REVIEW_ALIASES,
-    )
-    best_column = None
+    best_metric: dict[str, Any] | None = None
     best_score = -1
-    for aliases in preferred_alias_groups:
+    default_aggregation = explicit_aggregation
+
+    for aliases, preferred_aggregation in metric_families:
         candidate = _pick_best_column(schema, question, aliases, dtype="numeric")
         if candidate is None:
             continue
         score = _score_column(candidate, aliases, question)
         if score > best_score:
             best_score = score
-            best_column = candidate
+            best_metric = candidate
+            default_aggregation = preferred_aggregation
 
-    if best_column is not None:
-        return best_column, aggregation
+    if best_metric is not None and best_score > 0:
+        return best_metric, explicit_aggregation if explicit_aggregation != "sum" else default_aggregation
 
     revenue_default = _pick_best_column(schema, "revenue sales total amount", REVENUE_ALIASES, dtype="numeric")
-    return revenue_default or numeric_columns[0], aggregation
+    return revenue_default or numeric_columns[0], explicit_aggregation
 
 
 def _pick_dimension_column(schema: dict[str, Any], question: str) -> dict[str, Any] | None:
